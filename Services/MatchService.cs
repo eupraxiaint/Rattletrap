@@ -66,6 +66,9 @@ namespace Rattletrap
     // all players that have readied up
     public List<IGuildUser> ReadyPlayers = new List<IGuildUser>();
 
+    // all players that have declined the match
+    public List<IGuildUser> DeclinedPlayers = new List<IGuildUser>();
+
     // the sequential ID used to identify the match in chat commands
     public int Id;
 
@@ -101,6 +104,46 @@ namespace Rattletrap
 
     // called when a lobby has been created for the match
     public abstract void OnLobby(String InName, String InPassword);
+
+    // called when the readied players have changed and we need to check if it's been accepted/declined
+    public void CheckReady()
+    {
+      List<IGuildUser> readiedPlayers = new List<IGuildUser>(ReadyPlayers);
+      foreach(IGuildUser declinedPlayer in DeclinedPlayers)
+      {
+        readiedPlayers.Remove(declinedPlayer);
+      }
+
+      // if all players are ready, start the match
+      if(readiedPlayers.Count == Players.Count)
+      {
+        OnReady();
+        State = MatchState.WaitingForLobby;
+        return;
+      }
+
+      // if all players have responded but some have canceled, cancel the match
+      if(readiedPlayers.Count + DeclinedPlayers.Count == Players.Count)
+      {
+        String message = $"Match id {Id} declined. Returning to queue: ";
+        foreach(IGuildUser user in ReadyPlayers)
+        {
+          message += user.Mention + " ";
+        }
+
+        SourceQueue.AnnouncementChannel.SendMessageAsync(message);
+
+        SourceQueue.Requeue(ReadyPlayers);
+        Cancel();
+      }
+    }
+
+    public void Cancel()
+    {
+      GuildInfo guildInfo = MatchService.GuildInfos[Guild];
+      guildInfo.Matches.Remove(this);
+      State = MatchState.Canceled;
+    }
   }
 
   // per-guild information - most tracked objects are contained here
@@ -201,6 +244,9 @@ namespace Rattletrap
           message += user.Mention + " ";
         }
         InMatch.SourceQueue.AnnouncementChannel.SendMessageAsync(message);
+
+        InMatch.SourceQueue.Requeue(InMatch.ReadyPlayers);
+        InMatch.Cancel();
       }
     }
 
@@ -412,32 +458,13 @@ namespace Rattletrap
             {
               match.ReadyPlayers.Add(reaction.User.Value as IGuildUser);
 
-              if(match.ReadyPlayers.Count == match.Players.Count)
-              {
-                match.OnReady();
-                match.State = MatchState.WaitingForLobby;
-              }
+              match.CheckReady();
             }
             else if(reaction.Emote.Name == XEmoji.Name)
             {
-              String message = $"{reaction.User.Value.Mention} declined the match. (id: {match.Id}) Returning to queue: ";
-              foreach(IUser player in match.Players)
-              {
-                if(player.Id != reaction.User.Value.Id)
-                {
-                  message += player.Mention + " ";
-                }
-              }
+              match.DeclinedPlayers.Add(reaction.User.Value as IGuildUser);
 
-              guildInfo.Matches.Remove(match);
-              match.State = MatchState.Canceled;
-
-              await originChannel.SendMessageAsync(message);
-
-              List<IGuildUser> playersToRequeue = match.Players;
-              playersToRequeue.Remove(reaction.User.Value as IGuildUser);
-
-              match.SourceQueue.Requeue(playersToRequeue);
+              match.CheckReady();
             }
 
             break;
@@ -458,11 +485,18 @@ namespace Rattletrap
 
         foreach(IMatch match in guildInfo.Matches)
         {
-          if(match.AnnounceMessage.Id == cachedMessage.Value.Id && match.Players.Contains(reaction.User.Value))
+          if(match.AnnounceMessage.Id == cachedMessage.Value.Id && match.State == MatchState.Pending && 
+            match.Players.Contains(reaction.User.Value))
           {
             if(reaction.Emote.Name == CheckmarkEmoji.Name)
             {
               match.ReadyPlayers.Remove(reaction.User.Value as IGuildUser);
+              match.CheckReady();
+            }
+            else if(reaction.Emote.Name == XEmoji.Name)
+            {
+              match.DeclinedPlayers.Remove(reaction.User.Value as IGuildUser);
+              match.CheckReady();
             }
 
             break;
