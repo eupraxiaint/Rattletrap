@@ -8,6 +8,7 @@ namespace Rattletrap
   {
     Success,
     AlreadyQueuing,
+    AlreadyInMatch
   }
 
   public enum UnqueueResult

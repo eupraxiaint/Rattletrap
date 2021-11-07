@@ -53,6 +53,10 @@ namespace Rattletrap.Modules
       {
         await ReplyAsync($"Could not queue {Context.User.Mention} in `{InQueue}`: user is already queuing. Use ;cancel to stop your current queue.");
       }
+      else if(result == QueueResult.AlreadyInMatch)
+      {
+        await ReplyAsync($"Could not queue {Context.User.Mention}: user is already in a match. Please cancel the match or let the timer run out.");
+      }
     }
 
     [Command("cancel")]

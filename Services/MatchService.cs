@@ -44,7 +44,6 @@ namespace Rattletrap
   {
     Pending,
     WaitingForLobby,
-    Ready,
     Canceled
   }
 
@@ -362,6 +361,14 @@ namespace Rattletrap
         if(playerCheckQueue.Value.IsUserInQueue(InUser))
         {
           return QueueResult.AlreadyQueuing;
+        }
+      }
+
+      foreach(IMatch match in guildInfo.Matches)
+      {
+        if(match.State != MatchState.Canceled && match.Players.Contains(InUser))
+        {
+          return QueueResult.AlreadyInMatch;
         }
       }
 

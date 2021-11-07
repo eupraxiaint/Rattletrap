@@ -135,9 +135,7 @@ namespace Rattletrap
       {
         message += player.Mention + " ";
       }
-
-      State = MatchState.Ready;
-
+      
       await SourceQueue.AnnouncementChannel.SendMessageAsync(message);
     }
 
