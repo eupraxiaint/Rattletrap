@@ -51,7 +51,7 @@ namespace Rattletrap
     private int ComputeRankBalanceScore()
     {
       Dictionary<PlayerRank, int> rankValues = new Dictionary<PlayerRank, int>();
-      rankValues.Add(PlayerRank.Uncalibrated, 4);
+      rankValues.Add(PlayerRank.Uncalibrated, 3);
       rankValues.Add(PlayerRank.Herald, 1);
       rankValues.Add(PlayerRank.Guardian, 2);
       rankValues.Add(PlayerRank.Crusader, 3);
