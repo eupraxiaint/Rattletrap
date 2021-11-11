@@ -16,24 +16,23 @@ namespace Rattletrap.Modules
     [Summary("Adds you to a matchmaking queue.")]
     public async Task Queue(string InQueue)
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
-
-      if(!guildInfo.Queues.ContainsKey(InQueue))
+      if(!guildInst.Queues.ContainsKey(InQueue))
       {
         string queues = "";
 
-        foreach(KeyValuePair<string, IQueue> queue in guildInfo.Queues)
+        foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
         {
           queues += $"`{queue.Key}` ";
         }
@@ -43,7 +42,7 @@ namespace Rattletrap.Modules
 
       IGuildUser guildUser = Context.User as IGuildUser;
 
-      QueueResult result = MatchService.QueueUser(guildUser, guildInfo.Queues[InQueue], guildUser, Context.Message);
+      QueueResult result = MatchService.QueueUser(guildUser, guildInst.Queues[InQueue], guildUser, Context.Message);
 
       if(result == QueueResult.Success)
       {
@@ -63,14 +62,15 @@ namespace Rattletrap.Modules
     [Summary("Removes you from the matchmaking queue.")]
     public async Task Cancel()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
       
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
@@ -92,20 +92,21 @@ namespace Rattletrap.Modules
     [Summary("Removes a user from the matchmaking queue. (admin-only)")]
     public async Task Remove(IGuildUser InUser)
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
       IGuildUser guildUser = Context.User as IGuildUser;
 
-      if(!guildUser.RoleIds.Contains(MatchService.FindRole(Context.Guild, "Admin").Id))
+      if(!guildInst.IsAdmin(guildUser))
       {
         await ReplyAsync(";remove is an admin-only command.");
         return;
@@ -127,29 +128,29 @@ namespace Rattletrap.Modules
     [Summary("Forces the ready timer to expire for a pending match. (admin-only)")]
     public async Task HurryUp(int InMatchId)
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
       IGuildUser guildUser = Context.User as IGuildUser;
 
-      if(!guildUser.RoleIds.Contains(MatchService.FindRole(Context.Guild, "Admin").Id))
+      if(!guildInst.IsAdmin(guildUser))
       {
         await ReplyAsync(";hurryup is an admin-only command.");
         return;
       }
 
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
       IMatch matchToHurry = null;
 
-      foreach(IMatch match in guildInfo.Matches)
+      foreach(IMatch match in guildInst.Matches)
       {
         if(match.Id == InMatchId)
         {
@@ -180,22 +181,21 @@ namespace Rattletrap.Modules
     [Summary("Displays information about the current queues")]
     public async Task QueueInfo()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
+      string message = "Queue info for " + guildInst.Name + ":\n";
 
-      string message = "Queue info for " + guildInfo.Name + ":\n";
-
-      foreach(KeyValuePair<string, IQueue> queue in guildInfo.Queues)
+      foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
       {
         message += $"`{queue.Key}`: " + queue.Value.GetMatchInfo() + "\n";
       }
@@ -207,22 +207,21 @@ namespace Rattletrap.Modules
     [Summary("Displays information about the current matches")]
     public async Task MatchInfo()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
       
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
+      string message = "Match info for " + guildInst.Name + ":\n";
 
-      string message = "Match info for " + guildInfo.Name + ":\n";
-
-      foreach(IMatch match in guildInfo.Matches)
+      foreach(IMatch match in guildInst.Matches)
       {
         message += $"Match {match.Id} - state: {match.State.ToString()}, queue: {match.SourceQueue.Name}, ready: {match.ReadyPlayers.Count}, players: ";
         foreach(IUser player in match.Players)
@@ -244,22 +243,21 @@ namespace Rattletrap.Modules
     [Summary("Announces lobby information for a match.")]
     public async Task Lobby(int InId, string InName, string InPassword)
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
       
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
-
       IMatch matchToAnnounce = null;
 
-      foreach(IMatch match in guildInfo.Matches)
+      foreach(IMatch match in guildInst.Matches)
       {
         if(match.Id == InId)
         {
@@ -286,19 +284,18 @@ namespace Rattletrap.Modules
     [Summary("Gets player information for a given player.")]
     public async Task DisplayPlayerInfo(IGuildUser InUser)
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
       
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
-
       PlayerInfo playerInfo = MatchService.GetPlayerInfo(Context.Guild, InUser);
 
       string message = $"Player info for {InUser.Username}:\nPositions: ";
@@ -308,7 +305,7 @@ namespace Rattletrap.Modules
         message += MatchService.PositionsToEmotes[position];
       }
 
-      string rankEmote = guildInfo.RanksToEmotes[playerInfo.Rank];
+      string rankEmote = guildInst.RanksToEmotes[playerInfo.Rank];
 
       message += $"\nRank: {rankEmote}";
 
@@ -319,7 +316,8 @@ namespace Rattletrap.Modules
     [Summary("Checks if Rattletrap is running.")]
     public async Task Ping()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
@@ -327,27 +325,52 @@ namespace Rattletrap.Modules
       await ReplyAsync($"My gears turn!");
     }
 
+    [Command("enable")]
+    public async Task Enable()
+    {
+      GuildInstance guildInstance = GuildInstance.Get(Context.Guild);
+
+      if(guildInstance != null)
+      {
+        guildInstance.Enabled = true;
+      }
+
+      await ReplyAsync($"Rattletrap enabled for {Context.Guild.Name}.");
+    }
+
+    [Command("disable")]
+    public async Task Disable()
+    {
+      GuildInstance guildInstance = GuildInstance.Get(Context.Guild);
+
+      if(guildInstance != null)
+      {
+        guildInstance.Enabled = false;
+      }
+
+      await ReplyAsync($"Rattletrap disabled for {Context.Guild.Name}.");
+    }
+
     [Command("help")]
     [Summary("Displays the list of commands Rattletrap can run.")]
     public async Task Help()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }
 
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
-        await ReplyAsync($"Please use {MatchService.GuildInfos[Context.Guild].MainBotChannel.Mention} for Rattletrap commands.");
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
-
-      GuildInfo guildInfo = MatchService.GuildInfos[Context.Guild];
       
       string messageText =
           "**;queue <queue-name>** - Adds you to a matchmaking queue. Available queues: ";
 
-      foreach(KeyValuePair<string, IQueue> queue in guildInfo.Queues)
+      foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
       {
         messageText += $"`{queue.Key}` ";
       }
@@ -361,7 +384,7 @@ namespace Rattletrap.Modules
 
       IGuildUser guildUser = Context.User as IGuildUser;
 
-      if(guildUser.RoleIds.Contains(MatchService.FindRole(Context.Guild, "Admin").Id))
+      if(guildInst.IsAdmin(guildUser))
       {
         messageText += "\n\nSince you're an admin, you also have access to these admin-only commands:\n"
         + "**;remove <user-mention>** - Removes another player from the matchmaking queue.\n"
@@ -374,7 +397,8 @@ namespace Rattletrap.Modules
     [Command("version")]
     public async Task Version()
     {
-      if(!MatchService.GuildInfos.ContainsKey(Context.Guild))
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
       {
         return;
       }

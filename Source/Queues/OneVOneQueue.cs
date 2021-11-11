@@ -8,8 +8,8 @@ namespace Rattletrap
 {
   public class OneVOneMatch : IMatch
   {
-    public OneVOneMatch(IGuild InGuild, IQueue InSourceQueue, List<IGuildUser> InPlayers)
-      : base(InGuild, InSourceQueue, InPlayers)
+    public OneVOneMatch(GuildInstance InGuildInst, IQueue InSourceQueue, List<IGuildUser> InPlayers)
+      : base(InGuildInst, InSourceQueue, InPlayers)
     {
 
     }
@@ -48,11 +48,10 @@ namespace Rattletrap
     {
       Random random = new Random();
       bool playerOrder = random.Next() % 2 == 0;
-      GuildInfo guildInfo = MatchService.GuildInfos[Guild];
-      PlayerInfo player0Info = MatchService.GetPlayerInfo(Guild, Players[0]);
-      PlayerInfo player1Info = MatchService.GetPlayerInfo(Guild, Players[1]);
-      string player0String = guildInfo.RanksToEmotes[player0Info.Rank] + " " + player0Info.User.Mention;
-      string player1String = guildInfo.RanksToEmotes[player1Info.Rank] + " " + player1Info.User.Mention;
+      PlayerInfo player0Info = MatchService.GetPlayerInfo(GuildInst.Guild, Players[0]);
+      PlayerInfo player1Info = MatchService.GetPlayerInfo(GuildInst.Guild, Players[1]);
+      string player0String = GuildInst.RanksToEmotes[player0Info.Rank] + " " + player0Info.User.Mention;
+      string player1String = GuildInst.RanksToEmotes[player1Info.Rank] + " " + player1Info.User.Mention;
       string radiantString = playerOrder ? player0String : player1String;
       string direString = playerOrder ? player1String : player0String;
       
@@ -92,7 +91,7 @@ namespace Rattletrap
         List<IGuildUser> players = new List<IGuildUser>();
         players.Add(InUser);
         players.Add(QueuedUser);
-        OneVOneMatch match = new OneVOneMatch(InUser.Guild, this, players);
+        OneVOneMatch match = new OneVOneMatch(GuildInstance.Get(Guild), this, players);
         MatchService.RunMatch(match);
         QueuedUser = null;
         return QueueResult.Success;

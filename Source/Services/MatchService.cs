@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using System.Linq;
+using Discord.Rest;
 
 namespace Rattletrap
 {
@@ -51,7 +52,7 @@ namespace Rattletrap
   public abstract class IMatch
   {
     // the guild this match was created in
-    public IGuild Guild;
+    public GuildInstance GuildInst;
 
     // the queue this match was created by
     public IQueue SourceQueue;
@@ -83,9 +84,9 @@ namespace Rattletrap
     // tracks the next match ID to use
     private static int NextMatchId = 0;
 
-    public IMatch(IGuild InGuild, IQueue InSourceQueue, List<IGuildUser> InPlayers)
+    public IMatch(GuildInstance InGuildInst, IQueue InSourceQueue, List<IGuildUser> InPlayers)
     {
-      Guild = InGuild;
+      GuildInst = InGuildInst;
       SourceQueue = InSourceQueue;
       State = MatchState.Pending;
       Players = InPlayers;
@@ -139,38 +140,9 @@ namespace Rattletrap
 
     public void Cancel()
     {
-      GuildInfo guildInfo = MatchService.GuildInfos[Guild];
-      guildInfo.Matches.Remove(this);
+      GuildInst.Matches.Remove(this);
       State = MatchState.Canceled;
     }
-  }
-
-  // per-guild information - most tracked objects are contained here
-  public class GuildInfo
-  {
-    // the name of the guild
-    public string Name;
-
-    // the list of queues by name
-    public Dictionary<string, IQueue> Queues = new Dictionary<string, IQueue>();
-
-    // the list of currently active matches
-    public List<IMatch> Matches = new List<IMatch>();
-
-    // the list of player positions mapped to their roles in the guild
-    public Dictionary<PlayerPosition, IRole> PositionsToRoles = new Dictionary<PlayerPosition, IRole>();
-
-    // the list of player ranks mapped to their roles in the guild
-    public Dictionary<PlayerRank, IRole> RanksToRoles = new Dictionary<PlayerRank, IRole>();
-
-    // the list of player ranks mapped to their emotes in the guild
-    public Dictionary<PlayerRank, string> RanksToEmotes = new Dictionary<PlayerRank, string>();
-
-    // the channel for admin bot commands
-    public ITextChannel AdminBotChannel;
-
-    // the channel for public bot commands
-    public ITextChannel MainBotChannel;
   }
 
   // this is the main service that runs Rattletrap - all commands in MatchModule.cs should be more or less directly
@@ -193,7 +165,6 @@ namespace Rattletrap
     public static Dictionary<PlayerPosition, string> PositionsToEmotes = new Dictionary<PlayerPosition, string>();
 
     // the list of guilds mapped to their information structures
-    public static Dictionary<IGuild, GuildInfo> GuildInfos = new Dictionary<IGuild, GuildInfo>();
 
     public MatchService(DiscordSocketClient InDiscordSocket, CommandService commands, IConfigurationRoot InConfig)
     {
@@ -217,9 +188,9 @@ namespace Rattletrap
     // todo: should this maybe be an abstract function on IMatch?
     public static async void RunMatch(IMatch InMatch)
     {
-      GuildInfo guildInfo = GuildInfos[InMatch.Guild];
+      GuildInstance guildInst = InMatch.GuildInst;
 
-      guildInfo.Matches.Add(InMatch);
+      guildInst.Matches.Add(InMatch);
 
       // announce the match
       InMatch.Announce();
@@ -249,114 +220,31 @@ namespace Rattletrap
       }
     }
 
-    // finds a role by name in a guild
-    public static IRole FindRole(IGuild InGuild, string InName)
-    {
-      foreach(IRole role in InGuild.Roles)
-      {
-        if(role.Name == InName)
-        {
-          return role;
-        }
-      }
-
-      return null;
-    }
-
-    // finds an emote by name in a guild
-    private static IEmote FindEmote(IGuild InGuild, string InName)
-    {
-      foreach(IEmote emote in InGuild.Emotes)
-      {
-        if(emote.Name == InName)
-        {
-          return emote;
-        }
-      }
-
-      return null;
-    }
-
-    // finds a text channel by name in a guild
-    public static ITextChannel FindTextChannel(IGuild InGuild, string InName)
-    {
-      IReadOnlyCollection<ITextChannel> textChannels = InGuild.GetTextChannelsAsync().Result;
-      foreach(ITextChannel textChannel in textChannels)
-      {
-        if(textChannel.Name == InName)
-        {
-          return textChannel;
-        }
-      }
-
-      return null;
-    }
-
     // runs when a guild is available for the bot. be careful initializing in here, this can get called again if the
     // bot loses internet connection!
     private async Task OnGuildAvailable(SocketGuild InGuild)
     {
-      if(config["guild"] == InGuild.Name && !GuildInfos.ContainsKey(InGuild))
+      GuildInstance guildInst = GuildInstance.Get(InGuild);
+
+      if(guildInst == null)
       {
-        ITextChannel announcementChannel = FindTextChannel(InGuild, "\U0001f514inhouse-announcement");
-
-        GuildInfo guildInfo = new GuildInfo();
-        guildInfo.Name = InGuild.Name;
-        guildInfo.Queues["eu"] = new InhouseQueue("eu", announcementChannel);
-        guildInfo.Queues["na"] = new InhouseQueue("na", announcementChannel);
-        guildInfo.Queues["sea"] = new InhouseQueue("sea", announcementChannel);
-        guildInfo.Queues["cis"] = new InhouseQueue("cis", announcementChannel);
-        guildInfo.Queues["eu-1v1"] = new OneVOneQueue("eu-1v1", announcementChannel);
-        guildInfo.Queues["na-1v1"] = new OneVOneQueue("na-1v1", announcementChannel);
-        guildInfo.Queues["sea-1v1"] = new OneVOneQueue("sea-1v1", announcementChannel);
-        guildInfo.Queues["cis-1v1"] = new OneVOneQueue("cis-1v1", announcementChannel);
-
-        guildInfo.PositionsToRoles[PlayerPosition.Safelane] = FindRole(InGuild, "Safelane");
-        guildInfo.PositionsToRoles[PlayerPosition.Midlane] = FindRole(InGuild, "Midlane");
-        guildInfo.PositionsToRoles[PlayerPosition.Offlane] = FindRole(InGuild, "Offlane");
-        guildInfo.PositionsToRoles[PlayerPosition.SoftSupport] = FindRole(InGuild, "Soft Support");
-        guildInfo.PositionsToRoles[PlayerPosition.Support] = FindRole(InGuild, "Support");
-
-        guildInfo.RanksToRoles[PlayerRank.Uncalibrated] = FindRole(InGuild, "Uncalibrated");
-        guildInfo.RanksToRoles[PlayerRank.Herald] = FindRole(InGuild, "Herald");
-        guildInfo.RanksToRoles[PlayerRank.Guardian] = FindRole(InGuild, "Guardian");
-        guildInfo.RanksToRoles[PlayerRank.Crusader] = FindRole(InGuild, "Crusader");
-        guildInfo.RanksToRoles[PlayerRank.Archon] = FindRole(InGuild, "Archon");
-        guildInfo.RanksToRoles[PlayerRank.Legend] = FindRole(InGuild, "Legend");
-        guildInfo.RanksToRoles[PlayerRank.Ancient] = FindRole(InGuild, "Ancient");
-        guildInfo.RanksToRoles[PlayerRank.Divine] = FindRole(InGuild, "Divine");
-        guildInfo.RanksToRoles[PlayerRank.Immortal] = FindRole(InGuild, "Immortal");
-
-        guildInfo.RanksToEmotes[PlayerRank.Uncalibrated] = "<:Uncalibrated:901649283546234931>";
-        guildInfo.RanksToEmotes[PlayerRank.Herald] = "<:Herald:901649551230906368>";
-        guildInfo.RanksToEmotes[PlayerRank.Guardian] = "<:Guardian:901649591580098620>";
-        guildInfo.RanksToEmotes[PlayerRank.Crusader] = "<:Crusader:901649627437203516>";
-        guildInfo.RanksToEmotes[PlayerRank.Archon] = "<:Archon:901649670252679248>";
-        guildInfo.RanksToEmotes[PlayerRank.Legend] = "<:Legend:901649722077491231>";
-        guildInfo.RanksToEmotes[PlayerRank.Ancient] = "<:Ancient:901649761269063720>";
-        guildInfo.RanksToEmotes[PlayerRank.Divine] = "<:Divine:901649806559154216>";
-        guildInfo.RanksToEmotes[PlayerRank.Immortal] = "<:Immortal:901649831582380112>";
-
-        guildInfo.MainBotChannel = FindTextChannel(InGuild, "\U0001f50einhouse-queue");
-        guildInfo.AdminBotChannel = FindTextChannel(InGuild, "admin-bot-commands");
-
-        GuildInfos.Add(InGuild, guildInfo);
+        GuildInstance.Create(InGuild);
       }
     }
 
     // returns whether or not the bot should send messages in the input channel
     public static bool IsAllowedChannel(IGuild InGuild, ITextChannel InChannel)
     {
-      GuildInfo guildInfo = GuildInfos[InGuild];
-      return guildInfo.AdminBotChannel == InChannel || guildInfo.MainBotChannel == InChannel;
+      GuildInstance guildInst = GuildInstance.Get(InGuild);
+      return guildInst.AdminBotChannel == InChannel || guildInst.MainBotChannel == InChannel;
     }
 
     // adds a user to the matchmaking queue
     public static QueueResult QueueUser(IGuildUser InUser, IQueue InQueue, IGuildUser InTriggeringUser = null, IMessage InTriggeringMessage = null)
     {
-      GuildInfo guildInfo = GuildInfos[InUser.Guild];
+      GuildInstance guildInstance = GuildInstance.Get(InUser.Guild);
 
-      foreach(KeyValuePair<string, IQueue> playerCheckQueue in guildInfo.Queues)
+      foreach(KeyValuePair<string, IQueue> playerCheckQueue in guildInstance.Queues)
       {
         if(playerCheckQueue.Value.IsUserInQueue(InUser))
         {
@@ -364,7 +252,7 @@ namespace Rattletrap
         }
       }
 
-      foreach(IMatch match in guildInfo.Matches)
+      foreach(IMatch match in guildInstance.Matches)
       {
         if(match.State != MatchState.Canceled && match.Players.Contains(InUser))
         {
@@ -378,9 +266,9 @@ namespace Rattletrap
     // removes a user from the matchmaking queue
     public static UnqueueResult UnqueueUser(IGuildUser InUser, IGuildUser InTriggeringUser = null, IMessage InTriggeringMessage = null)
     {
-      GuildInfo guildInfo = GuildInfos[InUser.Guild];
+      GuildInstance guildInst = GuildInstance.Get(InUser.Guild);
 
-      foreach(KeyValuePair<string, IQueue> queue in guildInfo.Queues)
+      foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
       {
         if(queue.Value.IsUserInQueue(InUser))
         {
@@ -395,17 +283,17 @@ namespace Rattletrap
     // announces a lobby for a match
     public static void AnnounceLobby(IGuild InGuild, IMatch InMatch, string InName, string InPassword)
     {
-      GuildInfo guildInfo = GuildInfos[InGuild];
+      GuildInstance guildInst = GuildInstance.Get(InGuild);
 
       InMatch.OnLobby(InName, InPassword);
 
-      guildInfo.Matches.Remove(InMatch);
+      guildInst.Matches.Remove(InMatch);
     }
 
     // gets the PlayerInfo struct for a user based on their roles
     public static PlayerInfo GetPlayerInfo(IGuild InGuild, IGuildUser InUser)
     {
-      GuildInfo guildInfo = GuildInfos[InGuild];
+      GuildInstance guildInst = GuildInstance.Get(InGuild);
 
       PlayerInfo result = new PlayerInfo();
       result.User = InUser;
@@ -414,7 +302,7 @@ namespace Rattletrap
 
       foreach(PlayerPosition position in PlayerPosition.GetValues(typeof(PlayerPosition)))
       {
-        if(guildUser.RoleIds.Contains(guildInfo.PositionsToRoles[position].Id))
+        if(guildUser.RoleIds.Contains(guildInst.PositionsToRoles[position].Id))
         {
           result.Positions.Add(position);
         }
@@ -433,7 +321,7 @@ namespace Rattletrap
 
       foreach(PlayerRank rank in PlayerRank.GetValues(typeof(PlayerRank)))
       {
-        IRole role = guildInfo.RanksToRoles[rank];
+        IRole role = guildInst.RanksToRoles[rank];
         if(guildUser.RoleIds.Contains(role.Id))
         {
           result.Rank = rank;
@@ -455,9 +343,9 @@ namespace Rattletrap
       {
         SocketGuildChannel channel = originChannel as SocketGuildChannel;
 
-        GuildInfo guildInfo = GuildInfos[channel.Guild];
+        GuildInstance guildInst = GuildInstance.Get(channel.Guild);
 
-        foreach(IMatch match in guildInfo.Matches)
+        foreach(IMatch match in guildInst.Matches)
         {
           if(match != null && match.State == MatchState.Pending && match.AnnounceMessage.Id == cachedMessage.Value.Id && match.Players.Contains(reaction.User.Value))
           {
@@ -488,9 +376,9 @@ namespace Rattletrap
       {
         SocketGuildChannel channel = originChannel as SocketGuildChannel;
 
-        GuildInfo guildInfo = GuildInfos[channel.Guild];
+        GuildInstance guildInst = GuildInstance.Get(channel.Guild);
 
-        foreach(IMatch match in guildInfo.Matches)
+        foreach(IMatch match in guildInst.Matches)
         {
           if(match.AnnounceMessage.Id == cachedMessage.Value.Id && match.State == MatchState.Pending && 
             match.Players.Contains(reaction.User.Value))

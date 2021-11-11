@@ -103,8 +103,8 @@ namespace Rattletrap
 
   public class InhouseMatch : IMatch
   {
-    public InhouseMatch(IGuild InGuild, IQueue InSourceQueue, List<IGuildUser> InPlayers)
-      : base(InGuild, InSourceQueue, InPlayers)
+    public InhouseMatch(GuildInstance InGuildInst, IQueue InSourceQueue, List<IGuildUser> InPlayers)
+      : base(InGuildInst, InSourceQueue, InPlayers)
     {
 
     }
@@ -141,15 +141,13 @@ namespace Rattletrap
 
     public override void OnLobby(String InName, String InPassword)
     {
-      GuildInfo guildInfo = MatchService.GuildInfos[Guild];
-
       String message = $"Lobby is up for match id {Id}! Name: **{InName}**, Password: **{InPassword}** \nRecommended teams:\nRadiant:\n";
       
       MatchShuffle bestShuffle = null;
 
       for(int i = 0; i < 20; ++i)
       {
-        MatchShuffle shuffle = new MatchShuffle(Guild, Players);
+        MatchShuffle shuffle = new MatchShuffle(GuildInst.Guild, Players);
         if(bestShuffle == null || shuffle.BalanceScore > bestShuffle.BalanceScore)
         {
           bestShuffle = shuffle;
@@ -158,7 +156,7 @@ namespace Rattletrap
 
       foreach(PlayerInfo player in bestShuffle.Radiant)
       {
-        message += player.User.Mention + " " + guildInfo.RanksToEmotes[player.Rank];
+        message += player.User.Mention + " " + GuildInst.RanksToEmotes[player.Rank];
 
         foreach(PlayerPosition position in player.Positions)
         {
@@ -172,7 +170,7 @@ namespace Rattletrap
       
       foreach(PlayerInfo player in bestShuffle.Dire)
       {
-        message += player.User.Mention + " " + guildInfo.RanksToEmotes[player.Rank];
+        message += player.User.Mention + " " + GuildInst.RanksToEmotes[player.Rank];
 
         foreach(PlayerPosition position in player.Positions)
         {
@@ -247,7 +245,7 @@ namespace Rattletrap
     {
       if(QueuingUsers.Count >= PlayersToKickOff)
       {
-        InhouseMatch match = new InhouseMatch(Guild, this, QueuingUsers.GetRange(0, PlayersToKickOff));
+        InhouseMatch match = new InhouseMatch(GuildInstance.Get(Guild), this, QueuingUsers.GetRange(0, PlayersToKickOff));
         QueuingUsers.RemoveRange(0, PlayersToKickOff);
         MatchService.RunMatch(match);
       }
