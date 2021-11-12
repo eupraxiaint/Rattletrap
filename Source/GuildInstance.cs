@@ -9,19 +9,27 @@ using System.Linq;
 
 namespace Rattletrap
 {
+#region GuildInstance definition
+  // manages all of the data Rattletrap associates with a particular guild
   public class GuildInstance
   {
-    private static Dictionary<IGuild, GuildInstance> Instances = new Dictionary<IGuild, GuildInstance>();
+#region Member definitions
 
+    // the guild this GuildInstance serves
     public IGuild Guild { get; private set; }
+
+    // the name of the guild this GuildInstance serves
     public string Name { get; private set; }
+
+    // the guild ID this GuildInstance serves
     public ulong Id { get; private set; }
+
+    // he filepath of the file we use to store data about this guild
     public string Filepath { get; private set; }
 
+    // whether or not Rattletrap is enabled for this guild
     private bool _enabled = true;
     public bool Enabled { get { return _enabled; } set { _enabled = value; SaveToFile(); } }
-
-    // old properties from GuildInfo
 
     // the list of queues by name
     public Dictionary<string, IQueue> Queues = new Dictionary<string, IQueue>();
@@ -44,13 +52,25 @@ namespace Rattletrap
     // the channel for public bot commands
     public ITextChannel MainBotChannel;
 
+    // the list of guilds mapped to their associated instances
+    private static Dictionary<IGuild, GuildInstance> Instances = new Dictionary<IGuild, GuildInstance>();
+
+  #endregion
+#region SavedData definition
+    // data stored to file
     private struct SavedData
     {
+      // the name of the guild
       public string Name;
+
+      // the guild ID from Discord
       public ulong Id;
+
+      // whether or not Rattletrap is enabled for this guild
       public bool Enabled;
     }
-
+#endregion
+#region FindRole, FindEmote, FindTextChannel
     // finds a role by name in a guild
     private static IRole FindRole(IGuild InGuild, string InName)
     {
@@ -93,17 +113,21 @@ namespace Rattletrap
 
       return null;
     }
-
+#endregion
+#region Create, Get
+    // creates an instance for a guild
     public static GuildInstance Create(IGuild InGuild)
     {
-      GuildInstance result = new GuildInstance();
-
+      // if we don't already have an instance for the guild, create it
       if(!Instances.ContainsKey(InGuild))
       {
+        GuildInstance result = new GuildInstance();
         Instances.Add(InGuild, result);
 
+        // build the filepath for the guild file
         result.Filepath = Path.Combine(AppContext.BaseDirectory, $"../Saved/Guilds/{InGuild.Id}.json");
 
+        // create the file if it doesn't exist, and save it
         if(!result.LoadFromFile())
         {
           result.Name = InGuild.Name;
@@ -112,6 +136,7 @@ namespace Rattletrap
           result.SaveToFile();
         }
 
+        // initialize non-saved data - channels, queues, roles, emotes
         ITextChannel announcementChannel = FindTextChannel(InGuild, "\U0001f514inhouse-announcement");
 
         result.Queues["eu"] = new InhouseQueue("eu", announcementChannel);
@@ -151,16 +176,17 @@ namespace Rattletrap
 
         result.MainBotChannel = FindTextChannel(InGuild, "\U0001f50einhouse-queue");
         result.AdminBotChannel = FindTextChannel(InGuild, "admin-bot-commands");
+
+        return result;
       }
       else
       {
-        // todo: add a warning log here
+        // todo: add a warning log here (we shouldn't attempt to create an instance if it already exists)
         return Instances[InGuild];
       }
-
-      return result;
     }
 
+    // gets the instance associated with a particular guild
     public static GuildInstance Get(IGuild InGuild)
     {
       if(Instances.ContainsKey(InGuild))
@@ -170,12 +196,16 @@ namespace Rattletrap
 
       return null;
     }
-
+#endregion
+#region IsAdmin
+    // determines whether or not the given user is a guild admin
     public bool IsAdmin(IGuildUser InUser)
     {
       return InUser.RoleIds.Contains(FindRole(InUser.Guild, "Admin").Id);
     }
-
+#endregion
+#region SaveToFile, LoadFromFile
+    // saves guild data to file
     private void SaveToFile()
     {
       string guildsDir = Path.Combine(AppContext.BaseDirectory, "../Saved/Guilds");
@@ -188,13 +218,14 @@ namespace Rattletrap
       SavedData data = new SavedData();
       data.Name = Name;
       data.Id = Id;
-      data.Enabled = Enabled;
+      data.Enabled = _enabled;
       TextWriter textWriter = new StreamWriter(Filepath);
       string textToWrite = JsonConvert.SerializeObject(data);
       textWriter.Write(textToWrite);
       textWriter.Close();
     }
 
+    // loads guild data from file
     private bool LoadFromFile()
     {
       if(!File.Exists(Filepath))
@@ -207,8 +238,10 @@ namespace Rattletrap
       SavedData data = JsonConvert.DeserializeObject<SavedData>(fileContents);
       Id = data.Id;
       Name = data.Name;
-      Enabled = data.Enabled;
+      _enabled = data.Enabled;
       return true;
     }
+#endregion
   };
+#endregion
 }
