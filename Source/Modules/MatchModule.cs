@@ -5,6 +5,7 @@ using Discord.WebSocket;
 using Discord;
 using System.Collections.Generic;
 using System.Collections;
+using System.Security;
 
 namespace Rattletrap.Modules
 {
@@ -14,7 +15,7 @@ namespace Rattletrap.Modules
   {
     [Command("queue")]
     [Summary("Adds you to a matchmaking queue.")]
-    public async Task Queue(string InQueue)
+    public async Task Queue()
     {
       GuildInstance guildInst = GuildInstance.Get(Context.Guild);
       if(!guildInst.Enabled)
@@ -28,34 +29,26 @@ namespace Rattletrap.Modules
         return;
       }
 
-      if(!guildInst.Queues.ContainsKey(InQueue))
+      Player player = Player.GetOrCreate(Context.User as IGuildUser);
+
+      GuildInstance.QueuePlayerResult result = guildInst.QueuePlayer(player);
+
+      EmbedBuilder embed = new EmbedBuilder();
+
+      if(result == GuildInstance.QueuePlayerResult.Success)
       {
-        string queues = "";
-
-        foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
-        {
-          queues += $"`{queue.Key}` ";
-        }
-
-        await ReplyAsync($"Could not queue {Context.User.Mention} in `{InQueue}`: queue does not exist. Available queues: " + queues);
+        embed.WithColor(Color.Green);
+        embed.WithDescription($"Successfully queued {Context.User.Mention}.");
+      }
+      else if(result == GuildInstance.QueuePlayerResult.AlreadyQueuing)
+      {
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"Could not queue {Context.User.Mention}`: user is already queuing.");
       }
 
-      IGuildUser guildUser = Context.User as IGuildUser;
-
-      QueueResult result = MatchService.QueueUser(guildUser, guildInst.Queues[InQueue], guildUser, Context.Message);
-
-      if(result == QueueResult.Success)
-      {
-        await ReplyAsync($"Successfully queued {Context.User.Mention} in `{InQueue}`.");
-      }
-      else if(result == QueueResult.AlreadyQueuing)
-      {
-        await ReplyAsync($"Could not queue {Context.User.Mention} in `{InQueue}`: user is already queuing. Use ;cancel to stop your current queue.");
-      }
-      else if(result == QueueResult.AlreadyInMatch)
-      {
-        await ReplyAsync($"Could not queue {Context.User.Mention}: user is already in a match. Please cancel the match or let the timer run out.");
-      }
+      embed.WithCurrentTimestamp();
+      
+      await ReplyAsync(embed: embed.Build());
     }
 
     [Command("cancel")]
@@ -67,25 +60,33 @@ namespace Rattletrap.Modules
       {
         return;
       }
-      
+
       if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
       {
         await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
 
-      IGuildUser guildUser = Context.User as IGuildUser;
+      Player player = Player.GetOrCreate(Context.User as IGuildUser);
 
-      UnqueueResult result = MatchService.UnqueueUser(guildUser, guildUser, Context.Message);
+      GuildInstance.UnqueuePlayerResult result = guildInst.UnqueuePlayer(player);
 
-      if(result == UnqueueResult.Success)
+      EmbedBuilder embed = new EmbedBuilder();
+
+      if(result == GuildInstance.UnqueuePlayerResult.Success)
       {
-        await ReplyAsync($"Successfully removed {Context.User.Mention} from matchmaking.");
+        embed.WithColor(Color.Green);
+        embed.WithDescription($"Successfully removed {Context.User.Mention}.");
       }
-      else if(result == UnqueueResult.NotQueuing)
+      else if(result == GuildInstance.UnqueuePlayerResult.NotQueuing)
       {
-        await ReplyAsync($"Could not remove {Context.User.Mention} from matchmaking: user was not queuing.");
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"Could not queue {Context.User.Mention}: user was not queuing.");
       }
+
+      embed.WithCurrentTimestamp();
+      
+      await ReplyAsync(embed: embed.Build());
     }
 
     [Command("remove")]
@@ -193,14 +194,28 @@ namespace Rattletrap.Modules
         return;
       }
 
-      string message = "Queue info for " + guildInst.Name + ":\n";
+      EmbedBuilder builder = new EmbedBuilder();
 
-      foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
+      builder.WithColor(Color.DarkTeal);
+      builder.WithCurrentTimestamp();
+      builder.WithTitle($"Queue info for {guildInst.Name}:");
+
+      if(guildInst.QueuingPlayers.Players.Count != 0)
       {
-        message += $"`{queue.Key}`: " + queue.Value.GetMatchInfo() + "\n";
+        string playersString = "";
+        foreach(Player player in guildInst.QueuingPlayers.Players)
+        {
+          playersString += player.Name + " ";
+        }
+
+        builder.AddField($"{guildInst.QueuingPlayers.Players.Count} players queuing:", playersString);
+      }
+      else
+      {
+        builder.AddField($"0 players queuing.", ":(");
       }
 
-      await ReplyAsync(message);
+      await ReplyAsync(embed: builder.Build());
     }
 
     [Command("matchinfo")]
@@ -296,20 +311,34 @@ namespace Rattletrap.Modules
         return;
       }
       
-      PlayerInfo playerInfo = MatchService.GetPlayerInfo(Context.Guild, InUser);
+      Player player = Player.GetOrCreate(InUser);
 
-      string message = $"Player info for {InUser.Username}:\nPositions: ";
+      EmbedBuilder builder = new EmbedBuilder();
+      builder.WithAuthor(player.GuildUser);
 
-      foreach(PlayerPosition position in playerInfo.Positions)
+      string modesString = "";
+      foreach(string mode in player.Modes)
       {
-        message += MatchService.PositionsToEmotes[position];
+        modesString += $"`{mode}` ";
       }
+      if(modesString == "")
+      {
+        modesString = "None";
+      }
+      builder.AddField("Modes", modesString);
 
-      string rankEmote = guildInst.RanksToEmotes[playerInfo.Rank];
+      string regionsString = "";
+      foreach(string region in player.Regions)
+      {
+        regionsString += $"`{region}` ";
+      }
+      if(regionsString == "")
+      {
+        regionsString = "None";
+      }
+      builder.AddField("Regions", regionsString);
 
-      message += $"\nRank: {rankEmote}";
-
-      await ReplyAsync(message);
+      await ReplyAsync(embed: builder.Build());
     }
 
     [Command("ping")]
@@ -349,6 +378,74 @@ namespace Rattletrap.Modules
       }
 
       await ReplyAsync($"Rattletrap disabled for {Context.Guild.Name}.");
+    }
+
+    [Command("setmodes")]
+    public async Task SetModes(params string[] InModes)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(Context.User as IGuildUser);
+
+      player.Modes.Clear();
+      foreach(string mode in InModes)
+      {
+        player.Modes.Add(mode);
+      }
+
+      player.SaveToFile();
+
+      EmbedBuilder embed = new EmbedBuilder();
+      embed.WithCurrentTimestamp();
+
+      string modesString = "";
+      foreach(string mode in player.Modes)
+      {
+        modesString += $"`{mode}` ";
+      }
+      embed.WithDescription($"Successfully set modes for {Context.User.Mention}: {modesString}");
+
+      await ReplyAsync(embed: embed.Build());
+    }
+
+    [Command("setregions")]
+    public async Task SetRegions(params string[] InRegions)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(Context.User as IGuildUser);
+
+      player.Regions.Clear();
+      foreach(string region in InRegions)
+      {
+        player.Regions.Add(region);
+      }
+
+      player.SaveToFile();
+
+      EmbedBuilder embed = new EmbedBuilder();
+      embed.WithCurrentTimestamp();
+
+      string regionsString = "";
+      foreach(string region in player.Regions)
+      {
+        regionsString += $"`{region}` ";
+      }
+      embed.WithDescription($"Successfully set regions for {Context.User.Mention}: {regionsString}");
+
+      await ReplyAsync(embed: embed.Build());
     }
 
     [Command("help")]

@@ -6,6 +6,8 @@ using Discord;
 using Newtonsoft.Json;
 using YamlDotNet.Core.Tokens;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace Rattletrap
 {
@@ -32,7 +34,10 @@ namespace Rattletrap
     public bool Enabled { get { return _enabled; } set { _enabled = value; SaveToFile(); } }
 
     // the list of queues by name
+    // \deprecated
     public Dictionary<string, IQueue> Queues = new Dictionary<string, IQueue>();
+
+    public PlayerCollection QueuingPlayers { get; private set; } = new PlayerCollection();
 
     // the list of currently active matches
     public List<IMatch> Matches = new List<IMatch>();
@@ -54,6 +59,10 @@ namespace Rattletrap
 
     // the list of guilds mapped to their associated instances
     private static Dictionary<IGuild, GuildInstance> Instances = new Dictionary<IGuild, GuildInstance>();
+
+    public List<string> AvailableModes = new List<string> { "inhouse", "practice", "casual" };
+
+    public List<string> AvailableRegions = new List<string> { "na", "eu", "cis", "sea" };
 
   #endregion
 #region SavedData definition
@@ -112,6 +121,30 @@ namespace Rattletrap
       }
 
       return null;
+    }
+#endregion
+#region GetRoleNameByRegionName
+    public string GetRoleNameByRegionName(string InRegionName)
+    {
+      switch(InRegionName)
+      {
+      case "cis":
+        return "CIS";
+      case "na":
+        return "NA";
+      case "sea":
+        return "SEA";
+      case "eu":
+        return "EU";
+      default:
+        return "";
+      }
+    }
+#endregion
+#region GetRegionRole
+    public IRole GetRegionRole(string InRegion)
+    {
+      return FindRole(Guild, GetRoleNameByRegionName(InRegion));
     }
 #endregion
 #region Create, Get
@@ -242,6 +275,52 @@ namespace Rattletrap
       return true;
     }
 #endregion
+#region QueuePlayer, UnqueuePlayer
+    public enum QueuePlayerResult
+    {
+      Success,
+      AlreadyQueuing
+    }
+
+    public QueuePlayerResult QueuePlayer(Player InPlayer)
+    {
+      if(QueuingPlayers.Players.Contains(InPlayer))
+      {
+        return QueuePlayerResult.AlreadyQueuing;
+      }
+      else
+      {
+        QueuingPlayers.Players.Add(InPlayer);
+        CheckForMatches();
+        return QueuePlayerResult.Success;
+      }
+    }
+
+    public enum UnqueuePlayerResult
+    {
+      Success,
+      NotQueuing
+    }
+
+    public UnqueuePlayerResult UnqueuePlayer(Player InPlayer)
+    {
+      if(QueuingPlayers.Players.Contains(InPlayer))
+      {
+        QueuingPlayers.Players.Remove(InPlayer);
+        CheckForMatches();
+        return UnqueuePlayerResult.Success;
+      }
+      else
+      {
+        return UnqueuePlayerResult.NotQueuing;
+      }
+    }
+#endregion
+#region CheckForMatches
+    void CheckForMatches()
+    {
+      
+    }
   };
 #endregion
 }
