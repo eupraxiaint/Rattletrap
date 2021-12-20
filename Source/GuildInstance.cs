@@ -8,6 +8,8 @@ using YamlDotNet.Core.Tokens;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using IronPython.Runtime;
+using System.Threading.Tasks;
 
 namespace Rattletrap
 {
@@ -57,12 +59,17 @@ namespace Rattletrap
     // the channel for public bot commands
     public ITextChannel MainBotChannel;
 
+    // the channel for match announcements
+    public ITextChannel AnnouncementChannel;
+
     // the list of guilds mapped to their associated instances
     private static Dictionary<IGuild, GuildInstance> Instances = new Dictionary<IGuild, GuildInstance>();
 
     public List<string> AvailableModes = new List<string> { "inhouse", "practice", "casual" };
 
     public List<string> AvailableRegions = new List<string> { "na", "eu", "cis", "sea" };
+
+    private List<IMatchGeneratorBase> MatchGenerators = new List<IMatchGeneratorBase>();
 
   #endregion
 #region SavedData definition
@@ -170,16 +177,16 @@ namespace Rattletrap
         }
 
         // initialize non-saved data - channels, queues, roles, emotes
-        ITextChannel announcementChannel = FindTextChannel(InGuild, "\U0001f514inhouse-announcement");
+        result.AnnouncementChannel = FindTextChannel(InGuild, "\U0001f514inhouse-announcement");
 
-        result.Queues["eu"] = new InhouseQueue("eu", announcementChannel);
-        result.Queues["na"] = new InhouseQueue("na", announcementChannel);
-        result.Queues["sea"] = new InhouseQueue("sea", announcementChannel);
-        result.Queues["cis"] = new InhouseQueue("cis", announcementChannel);
-        result.Queues["eu-1v1"] = new OneVOneQueue("eu-1v1", announcementChannel);
-        result.Queues["na-1v1"] = new OneVOneQueue("na-1v1", announcementChannel);
-        result.Queues["sea-1v1"] = new OneVOneQueue("sea-1v1", announcementChannel);
-        result.Queues["cis-1v1"] = new OneVOneQueue("cis-1v1", announcementChannel);
+        result.Queues["eu"] = new InhouseQueue("eu", result.AnnouncementChannel);
+        result.Queues["na"] = new InhouseQueue("na", result.AnnouncementChannel);
+        result.Queues["sea"] = new InhouseQueue("sea", result.AnnouncementChannel);
+        result.Queues["cis"] = new InhouseQueue("cis", result.AnnouncementChannel);
+        result.Queues["eu-1v1"] = new OneVOneQueue("eu-1v1", result.AnnouncementChannel);
+        result.Queues["na-1v1"] = new OneVOneQueue("na-1v1", result.AnnouncementChannel);
+        result.Queues["sea-1v1"] = new OneVOneQueue("sea-1v1", result.AnnouncementChannel);
+        result.Queues["cis-1v1"] = new OneVOneQueue("cis-1v1", result.AnnouncementChannel);
 
         result.PositionsToRoles[PlayerPosition.Safelane] = FindRole(InGuild, "Safelane");
         result.PositionsToRoles[PlayerPosition.Midlane] = FindRole(InGuild, "Midlane");
@@ -209,6 +216,9 @@ namespace Rattletrap
 
         result.MainBotChannel = FindTextChannel(InGuild, "\U0001f50einhouse-queue");
         result.AdminBotChannel = FindTextChannel(InGuild, "admin-bot-commands");
+
+        result.MatchGenerators = new List<IMatchGeneratorBase>();
+        result.MatchGenerators.Add(new MatchGenerator<InhouseMatch2>(result));
 
         return result;
       }
@@ -282,7 +292,7 @@ namespace Rattletrap
       AlreadyQueuing
     }
 
-    public QueuePlayerResult QueuePlayer(Player InPlayer)
+    public QueuePlayerResult QueuePlayer(Player InPlayer, bool InResetQueueTime = true, bool InCheckForMatches = true)
     {
       if(QueuingPlayers.Players.Contains(InPlayer))
       {
@@ -291,7 +301,10 @@ namespace Rattletrap
       else
       {
         QueuingPlayers.Players.Add(InPlayer);
-        CheckForMatches();
+        if(InCheckForMatches)
+        {
+          CheckForMatches();
+        }
         return QueuePlayerResult.Success;
       }
     }
@@ -317,10 +330,20 @@ namespace Rattletrap
     }
 #endregion
 #region CheckForMatches
-    void CheckForMatches()
+    public void CheckForMatches()
     {
-      
+      foreach(IMatchGeneratorBase matchGenerator in MatchGenerators)
+      {
+        List<MatchCandidate> candidates = matchGenerator.CheckForMatches(QueuingPlayers);
+
+        if(candidates.Count > 0)
+        {
+          QueuingPlayers = QueuingPlayers - candidates[0].Players;
+          IMatch2 match = matchGenerator.GenerateMatch(candidates[0]);
+        }
+      }
     }
   };
+#endregion
 #endregion
 }

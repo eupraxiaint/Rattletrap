@@ -35,7 +35,21 @@ namespace Rattletrap
                 File.Create(_logFile).Dispose();
 
             string logText = $"{DateTime.UtcNow.ToString("hh:mm:ss")} [{msg.Severity}] {msg.Source}: {msg.Exception?.ToString() ?? msg.Message}";
-            File.AppendAllText(_logFile, logText + "\n");     // Write the log text to a file
+            
+            bool saved = false;
+            while(!saved)
+            {
+                try
+                {
+                    File.AppendAllText(_logFile, logText + "\n");     // Write the log text to a file
+                    saved = true;
+                }
+                catch(IOException)
+                {
+
+                }
+            }
+
 
             return Console.Out.WriteLineAsync(logText);       // Write the log text to the console
         }

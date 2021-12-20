@@ -8,6 +8,7 @@ using Discord;
 using Discord.Commands;
 using Discord.Rest;
 using Newtonsoft.Json;
+using Microsoft.Scripting.Runtime;
 
 namespace Rattletrap
 {
@@ -23,6 +24,11 @@ namespace Rattletrap
     public PlayerCollection(List<Player> InPlayers)
     {
       Players = InPlayers;
+    }
+
+    public PlayerCollection(PlayerCollection InPlayerCollection)
+    {
+      Players = InPlayerCollection.Players;
     }
 
     public PlayerCollection FilterByRegion(string InRegion)
@@ -52,6 +58,26 @@ namespace Rattletrap
         }
       }
 
+      return result;
+    }
+
+    public static PlayerCollection operator +(PlayerCollection InLhs, PlayerCollection InRhs)
+    {
+      PlayerCollection result = new PlayerCollection(InLhs);
+      foreach(Player player in InRhs.Players)
+      {
+        result.Players.Add(player);
+      }
+      return result;
+    }
+
+    public static PlayerCollection operator -(PlayerCollection InLhs, PlayerCollection InRhs)
+    {
+      PlayerCollection result = new PlayerCollection(InLhs);
+      foreach(Player player in InRhs.Players)
+      {
+        result.Players.Remove(player);
+      }
       return result;
     }
   };
