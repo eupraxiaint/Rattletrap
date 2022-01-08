@@ -82,6 +82,28 @@ namespace Rattletrap
     }
   };
 
+  public enum EPlayerRankMedal
+  {
+    Unranked,
+    Herald,
+    Guardian,
+    Crusader,
+    Archon,
+    Legend,
+    Ancient,
+    Divine,
+    Immortal
+  };
+
+  public enum EPlayerRole
+  {
+    Support,
+    SoftSupport,
+    Offlane,
+    Midlane,
+    Safelane
+  };
+
   public class Player
   {
     private static Dictionary<IGuildUser, Player> GuildUsersToPlayers = new Dictionary<IGuildUser, Player>();
@@ -91,6 +113,8 @@ namespace Rattletrap
     public string Filepath { get; private set; }
     public List<string> Modes = new List<string>();
     public List<string> Regions = new List<string>();
+    public EPlayerRankMedal RankMedal;
+    public List<EPlayerRole> PlayerRoles = new List<EPlayerRole>();
 
     private void FillRegionsFromRoles()
     {
@@ -117,6 +141,97 @@ namespace Rattletrap
       }
     }
 
+    public void FillRankMedalFromRoles()
+    {
+      RankMedal = EPlayerRankMedal.Unranked;
+      foreach(ulong roleId in GuildUser.RoleIds)
+      {
+        IRole role = GuildUser.Guild.GetRole(roleId);
+        if(role.Name == "Unranked")
+        {
+          RankMedal = EPlayerRankMedal.Unranked;
+          break;
+        }
+        else if(role.Name == "Herald")
+        {
+          RankMedal = EPlayerRankMedal.Herald;
+          break;
+        }
+        else if(role.Name == "Guardian")
+        {
+          RankMedal = EPlayerRankMedal.Guardian;
+          break;
+        }
+        else if(role.Name == "Crusader")
+        {
+          RankMedal = EPlayerRankMedal.Crusader;
+          break;
+        }
+        else if(role.Name == "Archon")
+        {
+          RankMedal = EPlayerRankMedal.Archon;
+          break;
+        }
+        else if(role.Name == "Legend")
+        {
+          RankMedal = EPlayerRankMedal.Legend;
+          break;
+        }
+        else if(role.Name == "Ancient")
+        {
+          RankMedal = EPlayerRankMedal.Ancient;
+          break;
+        }
+        else if(role.Name == "Divine")
+        {
+          RankMedal = EPlayerRankMedal.Divine;
+          break;
+        }
+        else if(role.Name == "Immortal")
+        {
+          RankMedal = EPlayerRankMedal.Immortal;
+          break;
+        }
+      }
+    }
+
+    public void FillPlayerRolesFromRoles()
+    {
+      foreach(ulong roleId in GuildUser.RoleIds)
+      {
+        IRole role = GuildUser.Guild.GetRole(roleId);
+        if(role.Name == "Support")
+        {
+          PlayerRoles.Add(EPlayerRole.Support);
+        }
+        if(role.Name == "Soft Support")
+        {
+          PlayerRoles.Add(EPlayerRole.SoftSupport);
+        }
+        if(role.Name == "Offlane")
+        {
+          PlayerRoles.Add(EPlayerRole.Offlane);
+        }
+        if(role.Name == "Midlane")
+        {
+          PlayerRoles.Add(EPlayerRole.Midlane);
+        }
+        if(role.Name == "Safelane")
+        {
+          PlayerRoles.Add(EPlayerRole.Safelane);
+        }
+      }
+
+      if(PlayerRoles.Count == 0)
+      {
+        PlayerRoles.Add(EPlayerRole.Support);
+        PlayerRoles.Add(EPlayerRole.SoftSupport);
+        PlayerRoles.Add(EPlayerRole.Offlane);
+        PlayerRoles.Add(EPlayerRole.Midlane);
+        PlayerRoles.Add(EPlayerRole.Safelane);
+      }
+    }
+
     public static Player GetOrCreate(IGuildUser InUser)
     {
       GuildInstance guildInst = GuildInstance.Get(InUser.Guild);
@@ -139,6 +254,9 @@ namespace Rattletrap
         player.FillRegionsFromRoles();
         player.SaveToFile();
       }
+
+      player.FillRankMedalFromRoles();
+      player.FillPlayerRolesFromRoles();
 
       return player;
     }

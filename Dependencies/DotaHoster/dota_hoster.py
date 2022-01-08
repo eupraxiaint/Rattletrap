@@ -1,15 +1,31 @@
 # from https://github.com/ziadoma/dota_hoster
 
 from steam.client import SteamClient
+from steam.enums import EResult
 from dota2.client import Dota2Client
+from dota2.features.chat import ChannelManager
+import dota2
 import config
+import os
+import socket
+import threading
+import shlex
+import logging
+from dota2.enums import DOTAChatChannelType_t
+
+print("Starting lobby hoster...", flush=True)
 
 client = SteamClient()
 dota = Dota2Client(client)
+dota.verbose_debug = True
+logging.basicConfig(format="%(name)s: %(message)s", level=logging.DEBUG)
 
 admins = config.admins
 lobby_slots = [""] * 10
 
+isReady = False
+
+sock = None
 
 def update_slot(lobby):
     for slot in range(10):
@@ -22,7 +38,7 @@ def update_slot(lobby):
                 lobby_slots[slot] = member.name
             else:
                 lobby_slots[slot] = ""
-    print(lobby_slots)
+    print(lobby_slots, flush=True)
 
 
 def check_to_start(lobby):
@@ -50,14 +66,14 @@ def kick_player(player_id):
 
 
 def start_lobby():
+    print("Starting game...", flush=True)
     dota.launch_practice_lobby()
 
-
-def create_lobby(lobby_name, lobby_password):
+def get_lobby_options(lobby_name, enable_bots=False):
     lobby_options = {
         "game_mode": 2,  # CAPTAINS MODE
         "allow_cheats": False,
-        "fill_with_bots": False,
+        "fill_with_bots": enable_bots,
         "intro_mode": False,
         "game_name": lobby_name,
         "server_region": 3,
@@ -85,13 +101,17 @@ def create_lobby(lobby_name, lobby_password):
         "league_node_id": 0,
     }
 
-    dota.create_tournament_lobby(password=lobby_password, tournament_game_id=None, tournament_id=0,
-                                 options=lobby_options)
+    return lobby_options
+
+def create_lobby(lobby_name, lobby_password):
+    lobby_options = get_lobby_options(lobby_name)
+
+    dota.create_practice_lobby(password=lobby_password, options=lobby_options)
 
 
 def destroy_lobby():
     if dota.lobby is not None:
-        print("Destroyed Lobby")
+        print("Destroyed Lobby", flush=True)
         dota.destroy_lobby()
 
 
@@ -102,13 +122,17 @@ def send_lobby_invite(player_ids):
 
 @client.on('logged_on')
 def start_dota():
+    print("start_dota", flush=True)
     dota.launch()
 
 
 @dota.on('ready')
 def do_dota_stuff():
+    print("do_dota_stuff", flush=True)
+    isReady = True
+    readyMsg = "ready"
+    sock.sendall(readyMsg.encode())
     destroy_lobby()
-    create_lobby("ducks", "ducks")
 
 
 @dota.on('lobby_invite')
@@ -120,20 +144,58 @@ def invited(invite):
 @dota.on('lobby_new')
 def on_lobby_join(lobby):
     # Leave player slot
-    print("Joined lobby: {lobby.lobby_id}")
+    print(f"Joined lobby: {lobby.lobby_id}", flush=True)
     dota.join_practice_lobby_team(slot=1)
-
+    dota.channels.join_lobby_channel()
 
 @dota.on('lobby_changed')
 def lobby_change(lobby):
     update_slot(lobby)
     check_to_start(lobby)
 
+@dota.channels.on(dota2.features.chat.ChannelManager.EVENT_JOINED_CHANNEL)
+def on_join_channel(channel):
+    print(f"Joined chat channel: {channel}", flush=True)
 
-@dota.on('message')
-def on_message(message):
-    print(message)
+@dota.channels.on(dota2.features.chat.ChannelManager.EVENT_MESSAGE)
+def on_message(channel, msg):
+    if channel.type == DOTAChatChannelType_t.DOTAChannelType_Lobby:
+        print(f"{msg.persona_name} says: \"{msg.text}\"", flush=True)
+        if msg.text[0] == ";":
+            splitMessage = shlex.split(msg.text)
+            if splitMessage[0] == ";start":
+                channel.send("Starting match...")
+                start_lobby()
+            elif splitMessage[0] == ";bots":
+                lobby_options = get_lobby_options(lobbyName, splitMessage[1] == "on")
+                dota.config_practice_lobby(lobby_options)
 
 
-client.cli_login(username=config.username, password=config.password)
-client.run_forever()
+def run_client_thread():
+    client.run_forever()
+        
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("127.0.0.1", 42069))
+
+loginResult = client.login(username=config.username, password=config.password)
+if loginResult != EResult.OK:
+    print(f"Login failed with error: {loginResult}", flush=True)
+else:
+    print("Logged in successfully.", flush=True)
+
+clientThread = threading.Thread(target=run_client_thread)
+clientThread.start()
+
+while True:
+    data = sock.recv(1024)
+    if not data:
+        continue
+    message = data.decode()
+    splitMessage = shlex.split(message)
+    if len(splitMessage) == 0:
+        continue
+    
+    if splitMessage[0] == "createlobby":
+        lobbyName = splitMessage[1]
+        create_lobby(lobbyName, splitMessage[2])

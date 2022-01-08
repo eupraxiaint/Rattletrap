@@ -1,4 +1,4 @@
-using System;
+/*using System;
 using System.Collections.Generic;
 using Discord;
 using System.Threading.Tasks;
@@ -126,3 +126,4 @@ namespace Rattletrap
     }
   }
 }
+*/

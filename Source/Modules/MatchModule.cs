@@ -51,6 +51,196 @@ namespace Rattletrap.Modules
       await ReplyAsync(embed: embed.Build());
     }
 
+    [Command("queue")]
+    [Summary("Adds you to a matchmaking queue.")]
+    public async Task Queue(IGuildUser InUser)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      if(!guildInst.IsAdmin(Context.User as IGuildUser))
+      {
+        await ReplyAsync("Only admins can queue other users.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(InUser);
+
+      GuildInstance.QueuePlayerResult result = guildInst.QueuePlayer(player);
+
+      EmbedBuilder embed = new EmbedBuilder();
+
+      if(result == GuildInstance.QueuePlayerResult.Success)
+      {
+        embed.WithColor(Color.Green);
+        embed.WithDescription($"Successfully queued {InUser.Mention}.");
+      }
+      else if(result == GuildInstance.QueuePlayerResult.AlreadyQueuing)
+      {
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"Could not queue {InUser.Mention}`: user is already queuing.");
+      }
+
+      embed.WithCurrentTimestamp();
+      
+      await ReplyAsync(embed: embed.Build());
+    }
+
+    [Command("queue")]
+    public async Task Queue(IRole InRole)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      if(!guildInst.IsAdmin(Context.User as IGuildUser))
+      {
+        await ReplyAsync("Only admins can queue other users.");
+        return;
+      }
+
+      List<Player> queuedPlayers = new List<Player>();
+
+      foreach(IGuildUser user in Context.Guild.Users)
+      {
+        if(user.RoleIds.Contains(InRole.Id))
+        {
+          Player player = Player.GetOrCreate(user);
+          GuildInstance.QueuePlayerResult result = guildInst.QueuePlayer(player);
+          queuedPlayers.Add(player);
+        }
+      }
+
+      if(queuedPlayers.Count == 0)
+      {
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Red);
+        embed.WithDescription("Failed to queue any users.");
+        await ReplyAsync(embed: embed.Build());
+      }
+      else
+      {
+        string mentions = "";
+        foreach(Player player in queuedPlayers)
+        {
+          mentions += $"{player.GuildUser.Mention} ";
+        }
+
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Green);
+        embed.WithDescription($"Successfully queued the following users:\n{mentions}");
+        await ReplyAsync(embed: embed.Build());
+      }
+      
+    }
+
+    [Command("respond")]
+    public async Task Respond(int InPollId, IGuildUser InUser, int InResponseIdx)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      if(!guildInst.IsAdmin(Context.User as IGuildUser))
+      {
+        await ReplyAsync(";respond is an admin-only command.");
+        return;
+      }
+
+      Poll poll = Poll.GetPollById(InPollId);
+
+      if(poll == null)
+      {
+        await ReplyAsync("Invalid poll ID.");
+        return;
+      }
+
+      if(poll.Responses.Count <= InResponseIdx || InResponseIdx < 0)
+      {
+        await ReplyAsync("Invalid response idx.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(InUser);
+
+      poll.AddResponse(player, poll.Responses[InResponseIdx].Emote);
+    }
+
+    [Command("respondall")]
+    public async Task RespondAll(int InPollId, int InResponseIdx)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      if(!guildInst.IsAdmin(Context.User as IGuildUser))
+      {
+        await ReplyAsync(";respondall is an admin-only command.");
+        return;
+      }
+
+      Poll poll = Poll.GetPollById(InPollId);
+
+      if(poll == null)
+      {
+        await ReplyAsync("Invalid poll ID.");
+        return;
+      }
+
+      if(poll.Responses.Count <= InResponseIdx || InResponseIdx < 0)
+      {
+        await ReplyAsync("Invalid response idx.");
+        return;
+      }
+
+      foreach(Player player in poll.Players.Players)
+      {
+        poll.AddResponse(player, poll.Responses[InResponseIdx].Emote);
+      }
+    }
+
+    [Command("lobbytest")]
+    public async Task LobbyTest()
+    {
+      LobbyCreateInfo lobbyCreateInfo = new LobbyCreateInfo();
+      lobbyCreateInfo.Name = "SKIBADEE, SKIBADANGER, I AM THE REARRANGER";
+      lobbyCreateInfo.Password = "1234";
+      Lobby lobby = new Lobby(lobbyCreateInfo);
+    }
+
     [Command("cancel")]
     [Summary("Removes you from the matchmaking queue.")]
     public async Task Cancel()
@@ -87,95 +277,6 @@ namespace Rattletrap.Modules
       embed.WithCurrentTimestamp();
       
       await ReplyAsync(embed: embed.Build());
-    }
-
-    [Command("remove")]
-    [Summary("Removes a user from the matchmaking queue. (admin-only)")]
-    public async Task Remove(IGuildUser InUser)
-    {
-      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
-      if(!guildInst.Enabled)
-      {
-        return;
-      }
-
-      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
-      {
-        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
-        return;
-      }
-
-      IGuildUser guildUser = Context.User as IGuildUser;
-
-      if(!guildInst.IsAdmin(guildUser))
-      {
-        await ReplyAsync(";remove is an admin-only command.");
-        return;
-      }
-
-      UnqueueResult result = MatchService.UnqueueUser(InUser, guildUser, Context.Message);
-
-      if(result == UnqueueResult.Success)
-      {
-        await ReplyAsync($"Successfully removed {InUser.Mention} from matchmaking.");
-      }
-      else if(result == UnqueueResult.NotQueuing)
-      {
-        await ReplyAsync($"Could not remove {InUser.Mention} from matchmaking: user was not queuing.");
-      }
-    }
-
-    [Command("hurryup")]
-    [Summary("Forces the ready timer to expire for a pending match. (admin-only)")]
-    public async Task HurryUp(int InMatchId)
-    {
-      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
-      if(!guildInst.Enabled)
-      {
-        return;
-      }
-
-      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
-      {
-        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
-        return;
-      }
-
-      IGuildUser guildUser = Context.User as IGuildUser;
-
-      if(!guildInst.IsAdmin(guildUser))
-      {
-        await ReplyAsync(";hurryup is an admin-only command.");
-        return;
-      }
-
-      IMatch matchToHurry = null;
-
-      foreach(IMatch match in guildInst.Matches)
-      {
-        if(match.Id == InMatchId)
-        {
-          matchToHurry = match;
-          break;
-        }
-      }
-
-      if(matchToHurry == null)
-      {
-        await ReplyAsync($"Could not hurry up match id {InMatchId}: a match with that id does not exist.");
-        return;
-      }
-
-      MatchService.HurryUpResult result = MatchService.HurryUp(matchToHurry);
-
-      if(result == MatchService.HurryUpResult.Success)
-      {
-        await ReplyAsync($"Successfully hurried up match id {InMatchId}.");
-      }
-      else if(result == MatchService.HurryUpResult.MatchNotPending)
-      {
-        await ReplyAsync($"Could not hurry up match id {InMatchId}: that match is not pending.");
-      }
     }
 
     [Command("queueinfo")]
@@ -233,66 +334,19 @@ namespace Rattletrap.Modules
         await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
         return;
       }
-      
-      string message = "Match info for " + guildInst.Name + ":\n";
 
-      foreach(IMatch match in guildInst.Matches)
+      EmbedBuilder builder = new EmbedBuilder();
+
+      builder.WithColor(Color.DarkBlue);
+      builder.WithTitle($"Match info for {guildInst.Name}");
+      builder.WithCurrentTimestamp();      
+
+      foreach(IMatch2 match in guildInst.Matches)
       {
-        message += $"Match {match.Id} - state: {match.State.ToString()}, queue: {match.SourceQueue.Name}, ready: {match.ReadyPlayers.Count}, players: ";
-        foreach(IUser player in match.Players)
-        {
-          IGuildUser guildUser = player as IGuildUser;
-          message += (guildUser.Nickname == null ? guildUser.Username : guildUser.Nickname);
-          if(player != match.Players.Last())
-          {
-            message += ", ";
-          }
-        }
-        message += "\n";
+        builder.AddField($"Match {match.Id}:", match.GetMatchInfo());
       }
 
-      await ReplyAsync(message);
-    }
-
-    [Command("lobby")]
-    [Summary("Announces lobby information for a match.")]
-    public async Task Lobby(int InId, string InName, string InPassword)
-    {
-      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
-      if(!guildInst.Enabled)
-      {
-        return;
-      }
-
-      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
-      {
-        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
-        return;
-      }
-      
-      IMatch matchToAnnounce = null;
-
-      foreach(IMatch match in guildInst.Matches)
-      {
-        if(match.Id == InId)
-        {
-          matchToAnnounce = match;
-          break;
-        }
-      }
-
-      if(matchToAnnounce == null)
-      {
-        await ReplyAsync($"Could not announce lobby info: match {InId} does not exist.");
-      }
-      else if(matchToAnnounce.State != MatchState.WaitingForLobby)
-      {
-        await ReplyAsync($"Could not announce lobby info: not all players are ready for match {InId}.");
-      }
-      else
-      {
-        MatchService.AnnounceLobby(Context.Guild, matchToAnnounce, InName, InPassword);
-      }
+      await ReplyAsync(embed: builder.Build());
     }
 
     [Command("playerinfo")]
@@ -467,11 +521,6 @@ namespace Rattletrap.Modules
       string messageText =
           "**;queue <queue-name>** - Adds you to a matchmaking queue. Available queues: ";
 
-      foreach(KeyValuePair<string, IQueue> queue in guildInst.Queues)
-      {
-        messageText += $"`{queue.Key}` ";
-      }
-
       messageText += "\n**;cancel** - Removes you from the matchmaking queue.\n"
         + "**;queueinfo** - Displays details about the available queues.\n"
         + "**;matchinfo** - Displays details about the current pending or ready matches.\n"
@@ -502,5 +551,61 @@ namespace Rattletrap.Modules
 
       await ReplyAsync("Rattletrap v0.6 prototype");
     }
+
+    [Command("balanceinfo")]
+    public async Task BalanceInfo(int InMatchId)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      IMatch2 match = IMatch2.GetMatchById(InMatchId);
+
+      if(match == null)
+      {
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"{InMatchId} is not a valid match ID.");
+
+        await ReplyAsync(embed: embed.Build());
+        return;
+      }
+
+      InhouseMatch2 inhouseMatch = match as InhouseMatch2;
+
+      if(inhouseMatch == null)
+      {
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"{InMatchId} is not an `inhouse` or `practice` match.");
+
+        await ReplyAsync(embed: embed.Build());
+        return;
+      }
+
+      {
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Teal);
+        embed.WithTitle($"Match {InMatchId} Balance Info");
+        embed.AddField("Team 1 Rank Value", $"{inhouseMatch.MatchShuffler.TeamRankValues[0]}");
+        embed.AddField("Team 2 Rank Value", $"{inhouseMatch.MatchShuffler.TeamRankValues[1]}");
+        embed.AddField("Rank Balance Score", $"{inhouseMatch.MatchShuffler.RankBalanceScore}");
+        embed.AddField("Off-Role Penalty", $"{inhouseMatch.MatchShuffler.OffRolePenalty}");
+        embed.AddField("Final Score", $"{inhouseMatch.MatchShuffler.Score}");
+
+        await ReplyAsync(embed: embed.Build());
+        return;
+      }
+    }
+
+    [Command()]
   }
 }

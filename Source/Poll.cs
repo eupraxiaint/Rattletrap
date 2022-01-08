@@ -41,6 +41,9 @@ namespace Rattletrap
     public DateTime Timestamp;
     public TimeSpan Timeout;
     public bool Complete;
+    public int Id;
+    private static int NextId = 0;
+    private static Dictionary<int, Poll> IdsToPolls = new Dictionary<int, Poll>();
 
     private Poll()
     {
@@ -51,11 +54,14 @@ namespace Rattletrap
     {
       Poll result = new Poll();
 
+      result.Id = NextId++;
       result.Players = new PlayerCollection(InCreateInfo.Players);
       result.Message = InCreateInfo.Message;
       result.Title = InCreateInfo.Title;
       result.Timestamp = DateTime.Now;
       result.Timeout = InCreateInfo.Timeout;
+
+      IdsToPolls[result.Id] = result;
 
       for(int responseIdx = 0; responseIdx < InCreateInfo.Responses.Count; ++responseIdx)
       {
@@ -91,6 +97,37 @@ namespace Rattletrap
       return result; 
     }
 
+    public static Poll GetPollById(int InId)
+    {
+      if(IdsToPolls.ContainsKey(InId))
+      {
+        return IdsToPolls[InId];
+      }
+
+      return null;
+    }
+
+    public void AddResponse(Player InPlayer, IEmote InEmote)
+    {
+      if(EmoteNameToResponseIdx.ContainsKey(InEmote.Name) && Players.Players.Contains(InPlayer))
+      {
+        int responseIdx = EmoteNameToResponseIdx[InEmote.Name];
+        Responses[responseIdx].Players.Players.Add(InPlayer);
+        RespondedPlayers.Add(InPlayer);
+        UpdatePollMessage();
+        CheckForAllPlayersResponded();
+      }
+    }
+
+    private void CheckForAllPlayersResponded()
+    {
+      if(!Complete && RespondedPlayers.Count == Players.Players.Count)
+      {
+        Complete = true;
+        OnAllPlayersResponded.Invoke();
+      }
+    }
+
     private async Task OnReactionAdded(Cacheable<IUserMessage, ulong> cachedMessage, 
       ISocketMessageChannel originChannel, SocketReaction reaction)
     {
@@ -105,12 +142,7 @@ namespace Rattletrap
           Responses[responseIdx].Players.Players.Add(player);
           RespondedPlayers.Add(player);
           UpdatePollMessage();
-
-          if(RespondedPlayers.Count == Players.Players.Count)
-          {
-            Complete = true;
-            OnAllPlayersResponded.Invoke();
-          }
+          CheckForAllPlayersResponded();
         }
       }
     }
@@ -153,6 +185,7 @@ namespace Rattletrap
       builder.WithTimestamp(Timestamp);
       builder.WithColor(Color.Purple);
       builder.WithTitle(Title);
+      builder.WithFooter($"Poll ID: {Id}");
 
       return builder;
     }

@@ -35,23 +35,13 @@ namespace Rattletrap
     private bool _enabled = true;
     public bool Enabled { get { return _enabled; } set { _enabled = value; SaveToFile(); } }
 
-    // the list of queues by name
-    // \deprecated
-    public Dictionary<string, IQueue> Queues = new Dictionary<string, IQueue>();
-
     public PlayerCollection QueuingPlayers { get; private set; } = new PlayerCollection();
 
     // the list of currently active matches
-    public List<IMatch> Matches = new List<IMatch>();
-
-    // the list of player positions mapped to their roles in the guild
-    public Dictionary<PlayerPosition, IRole> PositionsToRoles = new Dictionary<PlayerPosition, IRole>();
-
-    // the list of player ranks mapped to their roles in the guild
-    public Dictionary<PlayerRank, IRole> RanksToRoles = new Dictionary<PlayerRank, IRole>();
+    public List<IMatch2> Matches = new List<IMatch2>();
 
     // the list of player ranks mapped to their emotes in the guild
-    public Dictionary<PlayerRank, string> RanksToEmotes = new Dictionary<PlayerRank, string>();
+    public Dictionary<EPlayerRankMedal, string> RanksToEmotes = new Dictionary<EPlayerRankMedal, string>();
 
     // the channel for admin bot commands
     public ITextChannel AdminBotChannel;
@@ -179,40 +169,15 @@ namespace Rattletrap
         // initialize non-saved data - channels, queues, roles, emotes
         result.AnnouncementChannel = FindTextChannel(InGuild, "\U0001f514inhouse-announcement");
 
-        result.Queues["eu"] = new InhouseQueue("eu", result.AnnouncementChannel);
-        result.Queues["na"] = new InhouseQueue("na", result.AnnouncementChannel);
-        result.Queues["sea"] = new InhouseQueue("sea", result.AnnouncementChannel);
-        result.Queues["cis"] = new InhouseQueue("cis", result.AnnouncementChannel);
-        result.Queues["eu-1v1"] = new OneVOneQueue("eu-1v1", result.AnnouncementChannel);
-        result.Queues["na-1v1"] = new OneVOneQueue("na-1v1", result.AnnouncementChannel);
-        result.Queues["sea-1v1"] = new OneVOneQueue("sea-1v1", result.AnnouncementChannel);
-        result.Queues["cis-1v1"] = new OneVOneQueue("cis-1v1", result.AnnouncementChannel);
-
-        result.PositionsToRoles[PlayerPosition.Safelane] = FindRole(InGuild, "Safelane");
-        result.PositionsToRoles[PlayerPosition.Midlane] = FindRole(InGuild, "Midlane");
-        result.PositionsToRoles[PlayerPosition.Offlane] = FindRole(InGuild, "Offlane");
-        result.PositionsToRoles[PlayerPosition.SoftSupport] = FindRole(InGuild, "Soft Support");
-        result.PositionsToRoles[PlayerPosition.Support] = FindRole(InGuild, "Support");
-
-        result.RanksToRoles[PlayerRank.Uncalibrated] = FindRole(InGuild, "Uncalibrated");
-        result.RanksToRoles[PlayerRank.Herald] = FindRole(InGuild, "Herald");
-        result.RanksToRoles[PlayerRank.Guardian] = FindRole(InGuild, "Guardian");
-        result.RanksToRoles[PlayerRank.Crusader] = FindRole(InGuild, "Crusader");
-        result.RanksToRoles[PlayerRank.Archon] = FindRole(InGuild, "Archon");
-        result.RanksToRoles[PlayerRank.Legend] = FindRole(InGuild, "Legend");
-        result.RanksToRoles[PlayerRank.Ancient] = FindRole(InGuild, "Ancient");
-        result.RanksToRoles[PlayerRank.Divine] = FindRole(InGuild, "Divine");
-        result.RanksToRoles[PlayerRank.Immortal] = FindRole(InGuild, "Immortal");
-
-        result.RanksToEmotes[PlayerRank.Uncalibrated] = "<:Uncalibrated:901649283546234931>";
-        result.RanksToEmotes[PlayerRank.Herald] = "<:Herald:901649551230906368>";
-        result.RanksToEmotes[PlayerRank.Guardian] = "<:Guardian:901649591580098620>";
-        result.RanksToEmotes[PlayerRank.Crusader] = "<:Crusader:901649627437203516>";
-        result.RanksToEmotes[PlayerRank.Archon] = "<:Archon:901649670252679248>";
-        result.RanksToEmotes[PlayerRank.Legend] = "<:Legend:901649722077491231>";
-        result.RanksToEmotes[PlayerRank.Ancient] = "<:Ancient:901649761269063720>";
-        result.RanksToEmotes[PlayerRank.Divine] = "<:Divine:901649806559154216>";
-        result.RanksToEmotes[PlayerRank.Immortal] = "<:Immortal:901649831582380112>";
+        result.RanksToEmotes[EPlayerRankMedal.Unranked] = "<:Uncalibrated:901649283546234931>";
+        result.RanksToEmotes[EPlayerRankMedal.Herald] = "<:Herald:901649551230906368>";
+        result.RanksToEmotes[EPlayerRankMedal.Guardian] = "<:Guardian:901649591580098620>";
+        result.RanksToEmotes[EPlayerRankMedal.Crusader] = "<:Crusader:901649627437203516>";
+        result.RanksToEmotes[EPlayerRankMedal.Archon] = "<:Archon:901649670252679248>";
+        result.RanksToEmotes[EPlayerRankMedal.Legend] = "<:Legend:901649722077491231>";
+        result.RanksToEmotes[EPlayerRankMedal.Ancient] = "<:Ancient:901649761269063720>";
+        result.RanksToEmotes[EPlayerRankMedal.Divine] = "<:Divine:901649806559154216>";
+        result.RanksToEmotes[EPlayerRankMedal.Immortal] = "<:Immortal:901649831582380112>";
 
         result.MainBotChannel = FindTextChannel(InGuild, "\U0001f50einhouse-queue");
         result.AdminBotChannel = FindTextChannel(InGuild, "admin-bot-commands");
@@ -340,6 +305,7 @@ namespace Rattletrap
         {
           QueuingPlayers = QueuingPlayers - candidates[0].Players;
           IMatch2 match = matchGenerator.GenerateMatch(candidates[0]);
+          Matches.Add(match);
         }
       }
     }

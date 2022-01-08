@@ -1,0 +1,88 @@
+interactions:
+- request:
+    body: !!python/unicode ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '46'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-steam/1.0.0-alpha6 python-requests/2.21.0
+    method: POST
+    uri: https://steamcommunity.com/login/getrsakey/
+  response:
+    body:
+      string: !!python/unicode '{"timestamp": 12345678, "token_gid": 0, "publickey_mod":
+        "ddb3f29bd33f38db5947d85dc2e46bf033916d9caa95948a9af1146bf246915b93e66124e025f21588c05549614fe4c1ffa2ec92ea76bf1c580422bc1fc85700cce8dd14ec232e47a03581dc670ecb3a125bc597569384e3ec2707674458c666c563b7a0972deddd855b23884ca76032c2c5a99af6e8debe47aace8d0bdb8fc42bb9758ce8db0765649f78cd4fa4b3d123ed7cbce0c05b57dbb1a8cbb82923c7c9ca8fecab923db2f3a85a05d8c8bf5a1aeed479d3f533b009cce7d9f9ca196397206bdda46fb850a4c4ea7eb3383e419121fac575629e893959175aedc936cb71527958eb308bd555cf0386939b5a3c097fa6156aeef5eb805168b7bdb511fd",
+        "publickey_exp": "010001", "success": true}'
+    headers:
+      cache-control:
+      - no-cache
+      connection:
+      - keep-alive
+      content-length:
+      - '616'
+      content-type:
+      - application/json; charset=utf-8
+      server:
+      - nginx
+      vary:
+      - Accept-Encoding
+      x-frame-options:
+      - DENY
+    status:
+      code: 200
+      message: OK
+- request:
+    body: !!python/unicode ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - identity
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '570'
+      Content-Type:
+      - application/x-www-form-urlencoded
+      User-Agent:
+      - python-steam/1.0.0-alpha6 python-requests/2.21.0
+    method: POST
+    uri: https://steamcommunity.com/login/dologin/
+  response:
+    body:
+      string: !!python/unicode '{"requires_twofactor": false, "login_complete": true,
+        "transfer_urls": ["https://store.steampowered.com/login/transfer", "https://help.steampowered.com/login/transfer"],
+        "transfer_parameters": {"steamid": "0", "remember_login": false, "token":
+        "AAAAAAAAAAAAAAAA", "token_secure": "BBBBBBBBBBBBBBBB", "auth": "ZZZZZZZZZZZZZZZZ"},
+        "success": true}'
+    headers:
+      cache-control:
+      - no-cache
+      connection:
+      - keep-alive
+      content-length:
+      - '345'
+      content-type:
+      - application/json; charset=utf-8
+      server:
+      - nginx
+      set-cookie:
+      - steamLogin=0%7C%7CAAAAAAAAAAAAAAAA; path=/; httponly
+      - steamLoginSecure=0%7C%7CBBBBBBBBBBBBBBBB; path=/; httponly; secure
+      - steamMachineAuth0=CCCCCCCCCCCCCCCC; path=/; httponly
+      vary:
+      - Accept-Encoding
+      x-frame-options:
+      - DENY
+    status:
+      code: 200
+      message: OK
+version: 1
