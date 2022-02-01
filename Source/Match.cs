@@ -12,9 +12,15 @@ namespace Rattletrap
     public object UserData;
   }
 
+  public class MatchmakingPoke
+  {
+    public Player Player;
+    public string Message;
+  }
+
   public abstract class IMatchGeneratorBase
   {
-    public abstract List<MatchCandidate> CheckForMatches(PlayerCollection InPlayers);
+    public abstract List<MatchCandidate> CheckForMatches(PlayerCollection InPlayers, List<MatchmakingPoke> OutPokes);
     public abstract IMatch2 GenerateMatch(MatchCandidate InCandidate);
   }
 
@@ -27,9 +33,9 @@ namespace Rattletrap
       GuildInstance = InGuildInst;
     }
 
-    public override List<MatchCandidate> CheckForMatches(PlayerCollection InPlayers)
+    public override List<MatchCandidate> CheckForMatches(PlayerCollection InPlayers, List<MatchmakingPoke> OutPokes)
     {
-      return (List<MatchCandidate>)typeof(MatchType).GetMethod("CheckForMatches").Invoke(null, new object[]{InPlayers});
+      return (List<MatchCandidate>)typeof(MatchType).GetMethod("CheckForMatches").Invoke(null, new object[]{InPlayers, OutPokes});
     }
 
     private static int NextId = 0;
@@ -40,8 +46,12 @@ namespace Rattletrap
       match.Players = InCandidate.Players;
       match.GuildInstance = GuildInstance;
       match.Id = NextId++;
+      foreach(Player player in match.Players.Players)
+      {
+        player.IsInQueue = false;
+      }
       IMatch2.RegisterMatch(match.Id, match);
-      match.Initialize();
+      match.Initialize(InCandidate.UserData);
       return match;
     }
   }
@@ -69,7 +79,7 @@ namespace Rattletrap
       return null;
     }
 
-    public abstract void Initialize();
+    public abstract void Initialize(object InUserData);
 
     public virtual string GetMatchInfo()
     {

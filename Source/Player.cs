@@ -9,6 +9,7 @@ using Discord.Commands;
 using Discord.Rest;
 using Newtonsoft.Json;
 using Microsoft.Scripting.Runtime;
+using IronPython.Runtime.Exceptions;
 
 namespace Rattletrap
 {
@@ -61,6 +62,36 @@ namespace Rattletrap
       return result;
     }
 
+    public PlayerCollection FilterByActive(bool InActive)
+    {
+      PlayerCollection result = new PlayerCollection();
+
+      foreach(Player player in Players)
+      {
+        if(player.IsActive == InActive)
+        {
+          result.Players.Add(player);
+        }
+      }
+
+      return result;
+    }
+
+    public PlayerCollection FilterByQueued(bool InQueued)
+    {
+      PlayerCollection result = new PlayerCollection();
+
+      foreach(Player player in Players)
+      {
+        if(player.IsInQueue == InQueued)
+        {
+          result.Players.Add(player);
+        }
+      }
+
+      return result;
+    }
+
     public static PlayerCollection operator +(PlayerCollection InLhs, PlayerCollection InRhs)
     {
       PlayerCollection result = new PlayerCollection(InLhs);
@@ -91,8 +122,10 @@ namespace Rattletrap
     Archon,
     Legend,
     Ancient,
-    Divine,
-    Immortal
+    Divine1To3,
+    Divine4To5,
+    ImmortalUnranked,
+    ImmortalTop1000
   };
 
   public enum EPlayerRole
@@ -115,111 +148,95 @@ namespace Rattletrap
     public List<string> Regions = new List<string>();
     public EPlayerRankMedal RankMedal;
     public List<EPlayerRole> PlayerRoles = new List<EPlayerRole>();
+    public DateTime LastActiveTime = DateTime.UnixEpoch;
+    public bool IsActive { get { return DateTime.Now - LastActiveTime < TimeSpan.FromHours(2); }}
+    public bool IsInQueue = false;
+    public IEmote Flair;
 
-    private void FillRegionsFromRoles()
+    public void UpdateRegionsFromPoll()
     {
       Regions.Clear();
-      foreach(ulong roleId in GuildUser.RoleIds)
+
+      GuildInstance guildInst = GuildInstance.Get(GuildUser.Guild);
+
+      if(guildInst.RegionsPoll == null)
       {
-        IRole role = GuildUser.Guild.GetRole(roleId);
-        if(role.Name == "NA")
+        return;
+      }
+
+      List<IEmote> reactions = guildInst.RegionsPoll.GetReactionsForUser(GuildUser);
+
+      if(reactions.Count == 0)
+      {
+        Regions.AddRange(new List<string> {"eu", "na", "sa", "cis", "sea"});
+      }
+      else
+      {
+        foreach(IEmote emote in reactions)
         {
-          Regions.Add("na");
-        }
-        else if(role.Name == "EU")
-        {
-          Regions.Add("eu");
-        }
-        else if(role.Name == "CIS")
-        {
-          Regions.Add("cis");
-        }
-        else if(role.Name == "SEA")
-        {
-          Regions.Add("sea");
+          if(emote.Name == StaticEmotes.NaRegion.Name)
+          {
+            Regions.Add("na");
+          }
+          else if(emote.Name == StaticEmotes.SaRegion.Name)
+          {
+            Regions.Add("sa");
+          }
+          else if(emote.Name == StaticEmotes.EuRegion.Name)
+          {
+            Regions.Add("eu");
+          }
+          else if(emote.Name == StaticEmotes.SeaRegion.Name)
+          {
+            Regions.Add("sea");
+          }
+          else if(emote.Name == StaticEmotes.CisRegion.Name)
+          {
+            Regions.Add("cis");
+          }
         }
       }
     }
 
-    public void FillRankMedalFromRoles()
+    public void UpdateRankMedalFromPoll()
     {
       RankMedal = EPlayerRankMedal.Unranked;
-      foreach(ulong roleId in GuildUser.RoleIds)
+
+      GuildInstance guildInst = GuildInstance.Get(GuildUser.Guild);
+
+      if(guildInst.RanksPoll == null)
       {
-        IRole role = GuildUser.Guild.GetRole(roleId);
-        if(role.Name == "Unranked")
-        {
-          RankMedal = EPlayerRankMedal.Unranked;
-          break;
-        }
-        else if(role.Name == "Herald")
-        {
-          RankMedal = EPlayerRankMedal.Herald;
-          break;
-        }
-        else if(role.Name == "Guardian")
-        {
-          RankMedal = EPlayerRankMedal.Guardian;
-          break;
-        }
-        else if(role.Name == "Crusader")
-        {
-          RankMedal = EPlayerRankMedal.Crusader;
-          break;
-        }
-        else if(role.Name == "Archon")
-        {
-          RankMedal = EPlayerRankMedal.Archon;
-          break;
-        }
-        else if(role.Name == "Legend")
-        {
-          RankMedal = EPlayerRankMedal.Legend;
-          break;
-        }
-        else if(role.Name == "Ancient")
-        {
-          RankMedal = EPlayerRankMedal.Ancient;
-          break;
-        }
-        else if(role.Name == "Divine")
-        {
-          RankMedal = EPlayerRankMedal.Divine;
-          break;
-        }
-        else if(role.Name == "Immortal")
-        {
-          RankMedal = EPlayerRankMedal.Immortal;
-          break;
-        }
+        return;
+      }
+
+      List<IEmote> reactions = guildInst.RanksPoll.GetReactionsForUser(GuildUser);
+
+      if(reactions.Count == 1)
+      {
+        RankMedal = StaticEmotes.GetRankMedalEnumFromEmote(reactions[0]);
+      }
+      else 
+      {
+        RankMedal = EPlayerRankMedal.Unranked;
       }
     }
 
-    public void FillPlayerRolesFromRoles()
+    public void UpdatePlayerRolesFromPoll()
     {
-      foreach(ulong roleId in GuildUser.RoleIds)
+      PlayerRoles.Clear();
+
+      GuildInstance guildInst = GuildInstance.Get(GuildUser.Guild);
+
+      if(guildInst.RolesPoll == null)
       {
-        IRole role = GuildUser.Guild.GetRole(roleId);
-        if(role.Name == "Support")
-        {
-          PlayerRoles.Add(EPlayerRole.Support);
-        }
-        if(role.Name == "Soft Support")
-        {
-          PlayerRoles.Add(EPlayerRole.SoftSupport);
-        }
-        if(role.Name == "Offlane")
-        {
-          PlayerRoles.Add(EPlayerRole.Offlane);
-        }
-        if(role.Name == "Midlane")
-        {
-          PlayerRoles.Add(EPlayerRole.Midlane);
-        }
-        if(role.Name == "Safelane")
-        {
-          PlayerRoles.Add(EPlayerRole.Safelane);
-        }
+        return;
+      }
+
+      List<IEmote> reactions = guildInst.RolesPoll.GetReactionsForUser(GuildUser);
+
+      foreach(IEmote emote in reactions)
+      {
+        PlayerRoles.Add(StaticEmotes.GetPlayerRoleEnumFromEmote(emote));
       }
 
       if(PlayerRoles.Count == 0)
@@ -229,6 +246,53 @@ namespace Rattletrap
         PlayerRoles.Add(EPlayerRole.Offlane);
         PlayerRoles.Add(EPlayerRole.Midlane);
         PlayerRoles.Add(EPlayerRole.Safelane);
+      }
+    }
+
+    public void UpdateFlairFromPoll()
+    {
+      GuildInstance guildInst = GuildInstance.Get(GuildUser.Guild);
+
+      if(guildInst.FlairPoll == null)
+      {
+        return;
+      }
+
+      List<IEmote> reactions = guildInst.FlairPoll.GetReactionsForUser(GuildUser);
+
+      if(reactions.Count == 0)
+      {
+        Flair = StaticEmotes.WhiteMediumSquare;
+      }
+      else
+      {
+        Flair = reactions[0];
+      }
+    }
+
+    public void UpdateModesFromPoll()
+    {
+      Modes.Clear();
+
+      GuildInstance guildInst = GuildInstance.Get(GuildUser.Guild);
+
+      if(guildInst.ModesPoll == null)
+      {
+        return;
+      }
+      
+      List<IEmote> reactions = guildInst.ModesPoll.GetReactionsForUser(GuildUser);
+
+      foreach(IEmote emote in reactions)
+      {
+        Modes.Add(StaticEmotes.GetModeNameFromEmote(emote));
+      }
+
+      if(Modes.Count == 0)
+      {
+        Modes.Add("inhouse");
+        Modes.Add("practice");
+        Modes.Add("casual");
       }
     }
 
@@ -250,15 +314,21 @@ namespace Rattletrap
       if(!player.LoadFromFile())
       {
         player.Name = InUser.Username;
-        player.Modes = new List<string> {"inhouse", "practice", "casual"};
-        player.FillRegionsFromRoles();
         player.SaveToFile();
       }
 
-      player.FillRankMedalFromRoles();
-      player.FillPlayerRolesFromRoles();
+      player.UpdateRegionsFromPoll();
+      player.UpdateRankMedalFromPoll();
+      player.UpdatePlayerRolesFromPoll();
+      player.UpdateModesFromPoll();
+      player.UpdateFlairFromPoll();
 
       return player;
+    }
+
+    public void SetActive()
+    {
+      LastActiveTime = DateTime.Now;
     }
 
     public void SaveToFile()
@@ -271,8 +341,6 @@ namespace Rattletrap
 
       SavedData savedData = new SavedData();
       savedData.Name = Name;
-      savedData.Modes = Modes;
-      savedData.Regions = Regions;
       
       TextWriter textWriter = new StreamWriter(Filepath);
       string textToWrite = JsonConvert.SerializeObject(savedData);
@@ -293,8 +361,6 @@ namespace Rattletrap
       textReader.Close();
 
       Name = data.Name;
-      Modes = data.Modes;
-      Regions = data.Regions;
 
       return true;
     }
@@ -302,8 +368,6 @@ namespace Rattletrap
     private class SavedData
     {
       public string Name;
-      public List<string> Modes = new List<string>();
-      public List<string> Regions = new List<string>();
     }
   }
 }

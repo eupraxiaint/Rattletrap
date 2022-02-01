@@ -24,12 +24,6 @@ namespace Rattletrap
     // the configuration data stored in _config.yml
     public static IConfigurationRoot Config;
 
-    // the checkmark emoji
-    public static Emoji CheckmarkEmoji = new Emoji("\u2705");
-
-    // the x emoji
-    public static Emoji XEmoji = new Emoji("\u274C");
-
     // the list of guilds mapped to their information structures
 
     public MatchService(DiscordSocketClient InDiscordSocket, CommandService commands, IConfigurationRoot InConfig)
@@ -45,6 +39,8 @@ namespace Rattletrap
       PositionsToEmotes[PlayerPosition.Support] = ":five:";*/
 
       Config = InConfig;
+
+      LobbyRunner.CreateLobbyRunners(1);
     }
 
     // runs when a guild is available for the bot. be careful initializing in here, this can get called again if the

@@ -91,12 +91,6 @@ namespace Rattletrap
     }
   };
 
-  public struct LobbyCreateInfo
-  {
-    public string Name;
-    public string Password;
-  }
-
   public class Lobby
   {
     private static LobbyHoster hoster = null;

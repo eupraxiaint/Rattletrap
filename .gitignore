@@ -352,3 +352,5 @@ MigrationBackup/
 .vscode/
 
 _config.yml
+_config.yml
+Dependencies/DotaHoster/config.py

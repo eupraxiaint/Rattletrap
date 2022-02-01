@@ -6,6 +6,7 @@ using Discord;
 using System.Collections.Generic;
 using System.Collections;
 using System.Security;
+using System;
 
 namespace Rattletrap.Modules
 {
@@ -13,6 +14,120 @@ namespace Rattletrap.Modules
   [Summary("Schedule some matches!")]
   public class MatchModule : ModuleBase<SocketCommandContext>
   {
+    private bool PerformEnabledCheck(SocketCommandContext InContext)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      return guildInst.Enabled;
+    }
+
+    private async Task<bool> PerformAdminCheck(SocketCommandContext InContext, string InCommandName)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+
+      if(!guildInst.IsAdmin(InContext.User as IGuildUser))
+      {
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.WithColor(Color.Red);
+        embed.WithDescription($"{MatchService.Config["prefix"]}{InCommandName} is an admin-only command.");
+        await InContext.Message.ReplyAsync(embed: embed.Build());
+        return false;
+      }
+
+      return true;
+    }
+
+    [Command("react")]
+    [Summary("Fakes adding a reaction as a particular user.")]
+    public async Task React(int InWidgetId, IGuildUser InUser, string InReaction)
+    {
+      if(!PerformEnabledCheck(Context) || !PerformAdminCheck(Context, "react").Result)
+      {
+        return;
+      }
+
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(InWidgetId >= guildInst.Widgets.Count)
+      {
+        EmbedBuilder builder = new EmbedBuilder();
+        builder.WithColor(Color.Red);
+        builder.WithDescription($"Invalid widget ID: {InWidgetId}");
+        await Context.Message.ReplyAsync(embed: builder.Build());
+
+        return;
+      }
+
+      IWidget widget = guildInst.Widgets[InWidgetId];
+      IEmote emote = null;
+      if(InReaction.Length <= 2)
+      {
+        emote = new Emoji(InReaction);
+      }
+      else if(InReaction[0] == '<')
+      {
+        emote = Emote.Parse(InReaction);
+      }
+      
+      widget.OnReactionAdded?.Invoke(emote, InUser);
+
+      if(widget.OnReactionModified != null)
+      {
+        await widget.OnReactionModified.Invoke(emote, InUser, true);
+      }
+
+      EmbedBuilder embed = new EmbedBuilder();
+      embed.WithColor(Color.Green);
+      embed.WithDescription($"Successfully added {InReaction} from {InUser.Mention} to widget ID {InWidgetId}.");
+      await Context.Message.ReplyAsync(embed: embed.Build());
+    }
+
+    [Command("reactall")]
+    [Summary("Fakes adding a reaction for all users with a given role.")]
+    public async Task ReactAll(int InWidgetId, IRole InRole, string InReaction)
+    {
+      if(!PerformEnabledCheck(Context) || !PerformAdminCheck(Context, "reactall").Result)
+      {
+        return;
+      }
+
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(InWidgetId >= guildInst.Widgets.Count)
+      {
+        EmbedBuilder builder = new EmbedBuilder();
+        builder.WithColor(Color.Red);
+        builder.WithDescription($"Invalid widget ID: {InWidgetId}");
+        await Context.Message.ReplyAsync(embed: builder.Build());
+        return;
+      }
+
+      IWidget widget = guildInst.Widgets[InWidgetId];
+      IEmote emote = null;
+      if(InReaction.Length <= 2)
+      {
+        emote = new Emoji(InReaction);
+      }
+      else if(InReaction[0] == '<')
+      {
+        emote = Emote.Parse(InReaction);
+      }
+      
+      foreach(IGuildUser user in Context.Guild.Users)
+      {
+        if(user.RoleIds.Contains(InRole.Id))
+        {
+          widget.OnReactionAdded?.Invoke(emote, user);
+          if(widget.OnReactionModified != null)
+          {
+            await widget.OnReactionModified?.Invoke(emote, user, true);
+          }
+        }
+      }
+
+      EmbedBuilder embed = new EmbedBuilder();
+      embed.WithColor(Color.Green);
+      embed.WithDescription($"Successfully added {InReaction} from {InRole.Mention} to widget ID {InWidgetId}.");
+      await Context.Message.ReplyAsync(embed: embed.Build());
+    }
+
     [Command("queue")]
     [Summary("Adds you to a matchmaking queue.")]
     public async Task Queue()
@@ -370,10 +485,19 @@ namespace Rattletrap.Modules
       EmbedBuilder builder = new EmbedBuilder();
       builder.WithAuthor(player.GuildUser);
 
+      string rolesString = "";
+      foreach(EPlayerRole role in player.PlayerRoles)
+      {
+        rolesString += StaticEmotes.GetPlayerRoleEmoteFromEnum(role);
+      }
+      builder.AddField("Roles", rolesString);
+
+      builder.AddField("Flair", player.Flair);
+
       string modesString = "";
       foreach(string mode in player.Modes)
       {
-        modesString += $"`{mode}` ";
+        modesString += StaticEmotes.GetModeEmojiFromName(mode);
       }
       if(modesString == "")
       {
@@ -384,13 +508,40 @@ namespace Rattletrap.Modules
       string regionsString = "";
       foreach(string region in player.Regions)
       {
-        regionsString += $"`{region}` ";
+        IEmote regionEmote = null;
+        switch(region)
+        {
+        case "eu":
+          regionEmote = StaticEmotes.EuRegion;
+          break;
+        case "na":
+          regionEmote = StaticEmotes.NaRegion;
+          break;
+        case "sa":
+          regionEmote = StaticEmotes.SaRegion;
+          break;
+        case "cis":
+          regionEmote = StaticEmotes.CisRegion;
+          break;
+        case "sea":
+          regionEmote = StaticEmotes.SeaRegion;
+          break;
+        }
+        regionsString += $"{regionEmote}";
       }
       if(regionsString == "")
       {
         regionsString = "None";
       }
       builder.AddField("Regions", regionsString);
+
+      builder.AddField("Rank Medal", StaticEmotes.GetRankMedalEmoteFromEnum(player.RankMedal));
+
+      if(player.LastActiveTime != DateTime.UnixEpoch)
+      {
+        TimeSpan timeSinceActive = DateTime.Now - player.LastActiveTime;
+        builder.AddField("Last Active", player.LastActiveTime.ToShortTimeString());
+      }
 
       await ReplyAsync(embed: builder.Build());
     }
@@ -464,6 +615,46 @@ namespace Rattletrap.Modules
         modesString += $"`{mode}` ";
       }
       embed.WithDescription($"Successfully set modes for {Context.User.Mention}: {modesString}");
+
+      await ReplyAsync(embed: embed.Build());
+    }
+
+    [Command("setmodes")]
+    public async Task SetModes(IGuildUser InUser, params string[] InModes)
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      if(!guildInst.IsAdmin(Context.User as IGuildUser))
+      {
+        await ReplyAsync($"Only admins can set modes for another user.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(InUser);
+
+      player.Modes.Clear();
+      foreach(string mode in InModes)
+      {
+        player.Modes.Add(mode);
+      }
+
+      player.SaveToFile();
+
+      EmbedBuilder embed = new EmbedBuilder();
+      embed.WithCurrentTimestamp();
+
+      string modesString = "";
+      foreach(string mode in player.Modes)
+      {
+        modesString += $"`{mode}` ";
+      }
+      embed.WithDescription($"Successfully set modes for {InUser.Mention}: {modesString}");
 
       await ReplyAsync(embed: embed.Build());
     }
@@ -606,6 +797,28 @@ namespace Rattletrap.Modules
       }
     }
 
-    [Command()]
+    [Command("active")]
+    public async Task Active()
+    {
+      GuildInstance guildInst = GuildInstance.Get(Context.Guild);
+      if(!guildInst.Enabled)
+      {
+        return;
+      }
+
+      if(!MatchService.IsAllowedChannel(Context.Guild, Context.Channel as ITextChannel))
+      {
+        await ReplyAsync($"Please use {guildInst.MainBotChannel.Mention} for Rattletrap commands.");
+        return;
+      }
+
+      Player player = Player.GetOrCreate(Context.User as IGuildUser);
+
+      player.SetActive();
+
+      EmbedBuilder builder = new EmbedBuilder();
+      builder.WithColor(Color.Green);
+      builder.WithDescription($"{Context.User.Mention}, you are now active and are subscribed to matchmaking messages.");
+    }
   }
 }
